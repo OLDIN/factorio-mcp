@@ -1,0 +1,66 @@
+name: CI
+
+# Every pull request and every push to main: the mod's pure-Lua tests on Lua 5.2 (the
+# version Factorio embeds), a lint of the mod code, the service's lint and tests, and the
+# public-repo hygiene gate.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mod:
+    name: Mod (Lua 5.2 tests, luacheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua 5.2 and luacheck
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q lua5.2 lua-check
+
+      - name: Lint the mod (.luacheckrc)
+        run: luacheck mod/factorio-mcp
+
+      - name: Tests
+        run: LUA=lua5.2 scripts/test-mod.sh
+
+  server:
+    name: Server (ruff, pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13" # same as server/Dockerfile
+
+      - name: Install
+        run: pip install -e "server[test]" "ruff==0.14.13"
+
+      - name: Lint (.ruff.toml)
+        run: ruff check .
+
+      - name: Tests
+        working-directory: server
+        run: pytest -q
+
+  hygiene:
+    name: Hygiene (no private details in files or history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the gate also scans history
+
+      - name: Check
+        run: scripts/check-hygiene.sh

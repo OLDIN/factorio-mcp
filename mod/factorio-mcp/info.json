@@ -1,0 +1,9 @@
+{
+  "name": "factorio-mcp",
+  "version": "0.1.0",
+  "title": "Factorio MCP",
+  "author": "OLDIN",
+  "factorio_version": "2.1",
+  "dependencies": ["base >= 2.1"],
+  "description": "Read-only queries for an external MCP service."
+}
