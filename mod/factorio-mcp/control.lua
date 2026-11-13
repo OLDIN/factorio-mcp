@@ -4,6 +4,8 @@
 
 local dispatcher = require("scripts.dispatcher")
 require("scripts.commands.hello")
+require("scripts.commands.server_info")
+require("scripts.commands.players")
 
 commands.add_command(
   "factorio-mcp",
