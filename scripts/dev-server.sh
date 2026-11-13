@@ -35,11 +35,16 @@ INI
 # Rebuild the mods dir from scratch so toggling the env vars is idempotent.
 find "$DEV/mods" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 ln -sfn "$ROOT/mod/factorio-mcp" "$DEV/mods/factorio-mcp"
+if [ -d "$DEV/probe-mod" ]; then
+  ln -sfn "$DEV/probe-mod" "$DEV/mods/probe-mod"
+fi
 MODS_JSON=$(python3 - "$SPACE_AGE" "$MODS_FROM" "$DEV/mods" <<'PY'
 import json, os, sys, zipfile
 space_age, src, dst = sys.argv[1] == "true", sys.argv[2], sys.argv[3]
 extra = []
 disabled = set()
+if os.path.exists(os.path.join(dst, "probe-mod")):
+    extra.append("probe-mod")
 if src and os.path.exists(os.path.join(src, "mod-list.json")):
     # honour the user's own enabled/disabled choices (some mods fail on a newer Factorio)
     listed = json.load(open(os.path.join(src, "mod-list.json")))["mods"]
@@ -80,4 +85,4 @@ fi
 exec "$FACTORIO_BIN" "${COMMON[@]}" --start-server "$SAVE" \
   --server-settings "$DEV/server-settings.json" \
   --bind 127.0.0.1 \
-  --rcon-bind 127.0.0.1:27015 --rcon-password dev
+  --rcon-bind 127.0.0.1:27015 --rcon-password dev "$@"

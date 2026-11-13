@@ -10,6 +10,105 @@ Tool versions on the development machine (macOS).
 | Lua | 5.5.1 | local interpreter; Factorio embeds Lua 5.2, so tests stay 5.2-compatible and CI runs `lua5.2` |
 | luacheck | not installed locally | runs in CI (`lua-check` package) |
 | uv | 0.10.0 | `/opt/homebrew/bin/uv` |
-| Python | 3.13.5 | service requires >= 3.13 |
+| Python | 3.13.5 | service requires >= 3.13 (local venv runs 3.15) |
 | ruff | 0.14.13 | same version as CI |
 | Docker | 27.5.1 | |
+
+---
+
+## 1. RCON Response Sizing & Packet Fragmentation
+
+Measurements taken over a live TCP connection to Factorio 2.1.24 RCON (port 27015):
+
+| Requested Size | Packets Received | Total Bytes Received | Payload Matches | Notes |
+|---|---|---|---|---|
+| 1,024 B (1 KB) | 1 | 1,025 B | Yes | Single packet; trailing `\n` appended by `rcon.print` |
+| 4,096 B (4 KB) | 1 | 4,097 B | Yes | Single packet; no fragmentation at standard 4 KB boundary |
+| 65,536 B (64 KB) | 1 | 65,537 B | Yes | Single packet |
+| 1,048,576 B (1 MB) | 1 | 1,048,577 B | Yes | Single packet; length prefix = 1,048,587 |
+| 2,097,152 B (2 MB) | 1 | 2,097,153 B | Yes | Single packet; length prefix = 2,097,163 |
+| 4,194,304 B (4 MB) | 1 | 4,194,305 B | Yes | Single packet; length prefix = 4,194,315 |
+
+### Findings & Architecture Decision
+- **No multi-packet splitting:** Unlike Valve's original Source RCON implementation (which chunks output into ~4 KB slices terminated by an empty packet), Factorio sends the entire response in a single RCON packet with an exact 32-bit length prefix.
+- `RconLink.exec` successfully reads and parses responses up to multi-megabyte sizes in one call without requiring multi-packet assembly logic.
+- `rcon.print(...)` automatically appends a trailing newline (`\n`), which `RconLink` or JSON decoders handle transparently.
+- **Budget Decision:** `RESPONSE_BUDGET_BYTES` in `limits.lua` is set to **48,000 bytes** (~47 KB). This allows hundreds of entity records or prototypes per page while remaining well within single-packet limits and maintaining fast serialization with low frame impact.
+
+---
+
+## 2. Lua API: `helpers.json_to_table` Behavior
+
+Tested with various valid, malformed, and adversarial inputs in Factorio 2.1.24:
+
+| Input | `pcall` Status | Return Value | Type | Behavior |
+|---|---|---|---|---|
+| ` "{" ` | `true` | `nil` | `nil` | Syntax error safely returns `nil` without raising Lua error |
+| ` "{\"a\":" ` | `true` | `nil` | `nil` | Unclosed object returns `nil` |
+| ` "\"x\"" ` | `true` | `"x"` | `string` | Top-level string parsed correctly |
+| ` "null" ` | `true` | `nil` | `nil` | JSON null maps to Lua `nil` |
+| ` "[1," ` | `true` | `nil` | `nil` | Unclosed array returns `nil` |
+| 100 KB random garbage | `true` | `nil` | `nil` | Arbitrary garbage returns `nil` with no crash or hang |
+| 500-level nested arrays | `true` | `{...}` | `table` | Deep nesting parsed without stack overflow |
+
+### Finding
+`helpers.json_to_table` does not throw Lua exceptions on malformed syntax or garbage; it safely evaluates and returns `nil`. Wrapping with `pcall` in `dispatcher.lua` remains good defensive programming.
+
+---
+
+## 3. Server State & Offline Players (`AUTO_PAUSE=true`)
+
+Tested on real save with 3 offline players and zero connected players:
+
+- **Offline player attributes:**
+  - `player.connected`: `false`.
+  - `player.character`: `nil` for all offline players.
+  - `player.physical_position`: accessible and returns a valid `MapPosition` table `{x, y}`.
+  - `player.physical_surface`: accessible and returns a valid `LuaSurface`.
+  - `player.position` and `player.surface`: match `physical_position` and `physical_surface`.
+  - **Policy decision for Task 5 (`format_player`):** Even though `physical_position` is readable for offline players in Lua, user-facing MCP tools will enforce `position = null` and `surface = null` when `online = false` to preserve privacy and match protocol specifications.
+- **Auto-pause behavior:**
+  - `game.tick_paused`: `false` (Factorio's engine pauses execution at the loop level rather than setting the Lua-level flag).
+  - `game.speed`: `1`.
+  - `connected_players`: `0`.
+  - `game.tick`: advanced by 1 tick over 2 seconds (only ticked during command execution). Simulation is frozen.
+  - RCON responds immediately and reliably when the server is auto-paused.
+
+---
+
+## 4. Entity Search Profiling & Real Save Topology
+
+Measured on the real save around the main production facility on `nauvis` (`x = -2071, y = -906`).
+
+Allowlist for machine queries: `assembling-machine`, `furnace`, `lab`, `mining-drill`, `rocket-silo`, `agricultural-tower`.
+
+Timings measured with `helpers.create_profiler()` averaged over 10 iterations:
+
+| Radius (tiles) | Machine Count Found | Query Time | Evaluation |
+|---|---|---|---|
+| R = 32 | 39 | **0.020 ms** | Instantaneous (< 0.15% frame budget) |
+| R = 64 | 101 | **0.059 ms** | Negligible (< 0.35% frame budget) |
+| R = 128 | 164 | **0.190 ms** | Well below 0.5 ms budget |
+| R = 256 | 164 | **0.352 ms** | Whole factory area; safe to run directly |
+
+### Conclusion for Area Diagnostics (Task 10)
+- Querying a 32-64 tile radius around a player or GPS coordinate takes under 0.06 ms.
+- Default search radius for `inspect_area`: **32 tiles** (with support for up to 64-128 tiles without frame drops).
+
+### Surface Chunk Distribution
+Iterated via `surface.get_chunks()`:
+
+| Surface | Generated Chunks | Notes |
+|---|---|---|
+| `nauvis` | 26,099 | Primary planet base |
+| `gleba` | 7,238 | Planetary outpost |
+| `vulcanus` | 5,418 | Planetary outpost |
+| `fulgora` | 5,202 | Planetary outpost |
+| `aquilo` | 2,778 | Planetary outpost |
+| `platform-1` .. `platform-10` | 156 to 1,425 | Space platforms |
+
+### Entity Types with `.status` on Real Save
+Scanning all entities across surfaces revealed 57 entity types that report a status:
+`accumulator`, `agricultural-tower`, `ammo-turret`, `arithmetic-combinator`, `artillery-turret`, `artillery-wagon`, `assembling-machine`, `asteroid-collector`, `beacon`, `boiler`, `car`, `cargo-bay`, `cargo-landing-pad`, `cargo-wagon`, `constant-combinator`, `container`, `decider-combinator`, `electric-turret`, `fish`, `fluid-turret`, `fluid-wagon`, `furnace`, `fusion-generator`, `fusion-reactor`, `generator`, `heat-pipe`, `inserter`, `lab`, `lamp`, `land-mine`, `locomotive`, `logistic-container`, `mining-drill`, `offshore-pump`, `pipe`, `pipe-to-ground`, `power-switch`, `programmable-speaker`, `pump`, `radar`, `rail-chain-signal`, `rail-signal`, `reactor`, `roboport`, `rocket-silo`, `selector-combinator`, `solar-panel`, `space-platform-hub`, `spider-vehicle`, `splitter`, `storage-tank`, `thruster`, `train-stop`, `transport-belt`, `tree`, `turret`, `wall`.
+
+The allowlist for workstation diagnostics in Task 10 (`assembling-machine`, `furnace`, `lab`, `mining-drill`, `rocket-silo`, `agricultural-tower`) covers the production machines while strictly avoiding vehicles, containers, or personal inventories.
