@@ -116,3 +116,18 @@ async def test_measure_job_costs(rcon, capsys):
         await bridge.call("job_status")
     with capsys.disabled():
         print(f"RCON round trip (job_status): {(time.monotonic() - t0) / 20 * 1000:.2f} ms")
+
+
+async def test_soft_wait_then_resume_on_a_big_base(rcon, capsys):
+    from factorio_mcp.jobs import JobRunner
+
+    bridge = ModBridge(rcon)
+    runner = JobRunner(bridge)
+    first = await runner.run("machines_overview", {}, poll=0.05, wait=0.2)
+    if first.get("status") != "running":
+        pytest.skip("the base is small enough to finish within the soft wait")
+    assert first["job_id"] > 0 and 0 <= first["progress"] <= 1
+    final = await runner.run("machines_overview", {}, poll=0.05, wait=60, job_id=first["job_id"])
+    assert "summary" in final and "status" not in final
+    with capsys.disabled():
+        print(f"\nsoft wait -> running at {first['progress']}, resumed -> {final['summary']}")

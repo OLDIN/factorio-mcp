@@ -4,7 +4,8 @@ from typing import Any
 
 from mcp.server.mcpserver.exceptions import ToolError
 
-from ..bridge import ModBridge, normalize_lists, normalize_maps
+from .. import jobs
+from ..bridge import ModBridge, ModError, normalize_lists, normalize_maps
 from ..gps import GpsParseError, parse_gps
 from ..identity import current_identity
 from ..jobs import JobRunner
@@ -17,6 +18,17 @@ SYNC_MAX_RADIUS = 64.0  # larger areas run as a tick-split job in the game
 def specs(bridge: ModBridge) -> list[ToolSpec]:
     runner = JobRunner(bridge)
 
+    async def finish(job_id: int | None, args: dict[str, Any] | None = None) -> dict[str, Any]:
+        try:
+            result = await runner.run("area", args or {}, wait=jobs.SOFT_TIMEOUT, job_id=job_id)
+        except ModError as err:
+            if err.code == "job_not_found":
+                raise ToolError(
+                    "That scan is gone (already collected, expired or cancelled). Start a new one without job_id."
+                ) from None
+            raise
+        return result if result.get("status") == "running" else normalize(result)
+
     async def locate(nick: str) -> dict[str, Any]:
         for entry in normalize_lists(await bridge.call("players"), ["players"])["players"]:
             if entry.get("name") == nick:
@@ -25,8 +37,13 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
                 return {"surface": entry["surface"], "x": entry["position"]["x"], "y": entry["position"]["y"]}
         raise ToolError(f"No such player: {nick}.")
     async def inspect_area(
-        gps: str | None = None, player: str | None = None, radius: float = 32.0
+        gps: str | None = None,
+        player: str | None = None,
+        radius: float = 32.0,
+        job_id: int | None = None,
     ) -> dict[str, Any]:
+        if job_id is not None:  # continue a scan that was still running
+            return await finish(job_id)
         args: dict[str, Any] = {"radius": radius}
         if gps is not None:
             try:
@@ -41,9 +58,11 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         if radius > SYNC_MAX_RADIUS:
             if "player" in args:  # a job needs a point: look the player up (positions are public)
                 args.update(await locate(args.pop("player")))
-            result = await runner.run("area", args)
-        else:
-            result = await bridge.call("area", args)
+            return await finish(None, args)
+        result = await bridge.call("area", args)
+        return normalize(result)
+
+    def normalize(result: dict[str, Any]) -> dict[str, Any]:
         normalize_lists(result, ["groups", "stopped", "drills"])
         normalize_maps(
             result,
@@ -59,7 +78,8 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
             "(status), which recipes, what is stuck in their inputs/outputs, drills about to run dry. "
             "Give a [gps=x,y,surface] tag, or a player's name, or nothing to use your own position. "
             "Only production machines are read, never vehicles, corpses or inventories of players. "
-            "Radii above 64 tiles are scanned in small steps over several game ticks (a few seconds).",
+            "Radii above 64 tiles are scanned in small steps over several game ticks; if the answer is "
+            "status \"running\", call the tool again with the returned job_id.",
             inspect_area,
         )
     ]

@@ -8,5 +8,6 @@ Rules:
 from memory. The Factorio wiki is fine for explaining mechanics, but it may lag behind 2.1 and \
 knows nothing about modded content.
 - You can see only your own inventory, never another player's. Positions of all players are visible.
+- Scans of a whole base or a big area can take a minute or two. If a tool answers status "running" with a job_id, call the same tool again with that job_id until it returns the result.
 - If the data is not available, say so and do not invent it.
 """

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import json
 import logging
@@ -89,6 +90,9 @@ def _wrap(spec: ToolSpec) -> Callable[..., Awaitable[Any]]:
         except ModError as err:
             outcome = "error"
             raise ToolError(f"Mod error: {err.code}: {err.message}") from None
+        except asyncio.CancelledError:
+            outcome = "cancelled"  # the client gave up (timeout, disconnect)
+            raise
         except Exception:
             outcome = "error"
             raise

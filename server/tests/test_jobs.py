@@ -68,3 +68,19 @@ async def test_paging_that_does_not_advance_is_refused(stack):
 
 def test_hello_helper_is_available():
     assert "job_start" in hello_reply(("hello", "job_start"))
+
+
+async def test_soft_wait_returns_running_without_cancelling(stack):
+    stack.fake.responses[START] = env({"job_id": 7, "mode": "ticks", "total_chunks": 4})
+    stack.fake.responses[result_cmd(0)] = env({"state": "running", "mode": "ticks", "progress": 0.4})
+    result = await JobRunner(stack.bridge).run("machines_overview", {}, poll=0.02, wait=0.1)
+    assert result["status"] == "running" and result["job_id"] == 7 and result["progress"] == 0.4
+    assert "job_id=7" in result["message"]
+    assert build_command("job_cancel", {"job_id": 7}) not in stack.fake.received  # the job keeps running
+
+
+async def test_resume_by_job_id_does_not_start_a_new_job(stack):
+    stack.fake.responses[result_cmd(0)] = env({"state": "done", "summary": {"machines": 1}, "groups": [], "total": 0})
+    result = await JobRunner(stack.bridge).run("machines_overview", {}, poll=0.02, wait=1.0, job_id=7)
+    assert result["summary"] == {"machines": 1}
+    assert not any("job_start" in c for c in stack.fake.received)
