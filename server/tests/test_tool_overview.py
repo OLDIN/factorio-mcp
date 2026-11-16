@@ -169,3 +169,40 @@ async def test_cancelled_call_is_audited_as_cancelled(stack, caplog):
     finally:
         reset_identity(marker)
     assert "tool=slow_tool" in caplog.text and "outcome=cancelled" in caplog.text
+
+
+def _group(i, count, working, surface="nauvis"):
+    return {"surface": surface, "name": f"machine-{i:03d}", "recipe": f"r{i}", "count": count, "working": working,
+            "by_status": {"working": working, "full_output": count - working} if count > working else {"working": working},
+            "examples": []}
+
+
+def test_compact_sorts_stuck_groups_first_and_pages():
+    from factorio_mcp.tools.overview import compact
+
+    groups = [_group(i, 10, 10) for i in range(40)] + [_group(100, 4, 1), _group(101, 9, 0, "gleba"), _group(102, 3, 2)]
+    result = {"summary": {"machines": 413, "working": 403, "groups": 43, "surfaces": 2}, "groups": groups}
+    out = compact(result, limit=2, offset=0, only_stopped=True)
+    assert [g["name"] for g in out["groups"]] == ["machine-101", "machine-100"]  # 9 stopped, then 3 stopped
+    assert out["total_groups"] == 3 and out["next"] == 2  # fully working groups are left out
+    assert out["by_status"]["full_output"] == 9 + 3 + 1
+    assert out["by_surface"]["gleba"] == {"machines": 9, "working": 0}
+    nxt = compact(result, limit=2, offset=out["next"], only_stopped=True)
+    assert [g["name"] for g in nxt["groups"]] == ["machine-102"] and nxt["next"] is None
+    everything = compact(result, limit=100, offset=0, only_stopped=False)
+    assert everything["total_groups"] == 43
+
+
+async def test_overview_answers_compactly(stack):
+    await _setup(stack)
+    start = build_command("job_start", {"kind": "machines_overview", "params": {}})
+    stack.fake.responses[start] = env({"job_id": 1, "mode": "idle", "total_chunks": 1})
+    groups = [_group(i, 10, 10) for i in range(300)] + [_group(900, 5, 0)]
+    stack.fake.responses[build_command("job_result", {"job_id": 1, "offset": 0})] = env({
+        "state": "done", "summary": {"machines": 3005, "working": 3000, "groups": 301, "surfaces": 1},
+        "groups": groups, "total": 301})
+    text = (await _call(stack, "base_machines_overview", {}))["content"][0]["text"]
+    data = json.loads(text)
+    assert len(data["groups"]) == 1 and data["groups"][0]["name"] == "machine-900"
+    assert data["by_status"]["full_output"] == 5 and data["total_groups"] == 1
+    assert len(text) < 3000  # 300 working groups are not in the answer

@@ -29,7 +29,7 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         consumes: str | None = None,
         machine: str | None = None,
         search: str | None = None,
-        limit: int = 50,
+        limit: int = 25,
         offset: int = 0,
         include_hidden: bool = False,
     ) -> dict[str, Any]:
@@ -52,7 +52,7 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         name: str | None = None,
         category: str | None = None,
         search: str | None = None,
-        limit: int = 50,
+        limit: int = 25,
         offset: int = 0,
     ) -> dict[str, Any]:
         machines = await cache.get("machines")
@@ -62,19 +62,19 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         return ref.paginate(ref.find_machines(machines, category=category, search=search), limit, offset)
 
     async def reference_items(
-        name: str | None = None, search: str | None = None, limit: int = 50, offset: int = 0,
+        name: str | None = None, search: str | None = None, limit: int = 25, offset: int = 0,
         include_hidden: bool = False,
     ) -> dict[str, Any]:
         return await listing("items", name, search, limit, offset, include_hidden)
 
     async def reference_fluids(
-        name: str | None = None, search: str | None = None, limit: int = 50, offset: int = 0,
+        name: str | None = None, search: str | None = None, limit: int = 25, offset: int = 0,
         include_hidden: bool = False,
     ) -> dict[str, Any]:
         return await listing("fluids", name, search, limit, offset, include_hidden)
 
     async def reference_modules(
-        name: str | None = None, search: str | None = None, limit: int = 50, offset: int = 0
+        name: str | None = None, search: str | None = None, limit: int = 25, offset: int = 0
     ) -> dict[str, Any]:
         return await listing("modules", name, search, limit, offset, True)
 
@@ -82,7 +82,7 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         return await listing("qualities", name, None, 50, 0, False)
 
     async def reference_technologies(
-        name: str | None = None, search: str | None = None, limit: int = 50, offset: int = 0,
+        name: str | None = None, search: str | None = None, limit: int = 25, offset: int = 0,
         include_hidden: bool = False,
     ) -> dict[str, Any]:
         return await listing("technologies", name, search, limit, offset, include_hidden)
