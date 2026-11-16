@@ -1,4 +1,8 @@
-"""Bearer-token store: a TOML file holding only sha256 hashes of tokens."""
+"""Bearer-token store: a TOML file holding only sha256 hashes of tokens.
+
+A missing file revokes everyone. A file that exists but does not parse keeps the last good state
+(a typo mid-edit must not lock people out), so revocation needs a valid file.
+"""
 
 from __future__ import annotations
 
@@ -29,8 +33,11 @@ class TokenStore:
         try:
             mtime_ns = self._path.stat().st_mtime_ns
         except OSError:
+            # Fail closed: a deleted or unreadable file revokes everyone.
             if force or self._mtime_ns is not None:
-                _LOGGER.warning("tokens file is not readable; keeping last good state")
+                _LOGGER.warning("tokens file is not readable; rejecting all tokens")
+            self._mtime_ns = None
+            self._entries = []
             return
         if not force and mtime_ns == self._mtime_ns:
             return

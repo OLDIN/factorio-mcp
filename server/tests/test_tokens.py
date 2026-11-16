@@ -59,3 +59,12 @@ def test_bad_file_at_start_rejects_everyone(tmp_path):
 
 def test_missing_file_rejects_everyone(tmp_path):
     assert TokenStore(tmp_path / "absent.toml").authenticate("x") is None
+
+
+def test_deleted_file_revokes_everyone(tmp_path):
+    f = tmp_path / "tokens.toml"
+    f.write_text(_entry("alice", "AliceNick", "tok-a"))
+    store = TokenStore(f)
+    assert store.authenticate("tok-a") is not None
+    f.unlink()
+    assert store.authenticate("tok-a") is None
