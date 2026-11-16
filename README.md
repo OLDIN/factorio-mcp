@@ -44,18 +44,27 @@ Docker.
    from `scripts/package-mod.sh`). Players receive it automatically when they join. Restart the game.
 2. **RCON on the same machine.** The service connects to the game's RCON port. Bind RCON to
    localhost (`--rcon-bind 127.0.0.1:27015`) so nothing else can reach it.
-3. **The service.**
+3. **The service.** A ready-made image is published at `ghcr.io/oldin/factorio-mcp`; the server needs
+   only three small files, not the repository and not a build:
    ```sh
-   cd deploy
-   cp .env.example .env              # set the data folder, host and allowed hosts
-   cp tokens.example.toml tokens.toml
-   ../scripts/new-token.py --name alice --nick AliceInGame   # prints a token once and a tokens.toml block
-   docker compose -f docker-compose.mcp.yml up -d --build
+   mkdir factorio-mcp && cd factorio-mcp
+   base=https://raw.githubusercontent.com/OLDIN/factorio-mcp/main
+   for f in deploy/docker-compose.mcp.yml deploy/.env.example deploy/tokens.example.toml deploy/update.sh; do
+     curl -fsSLO "$base/$f"
+   done
+   chmod +x update.sh && cp .env.example .env && cp tokens.example.toml tokens.toml   # edit both
    ```
-   Put the printed block into `tokens.toml` and give the token to that person. The container runs
-   as a non-root user with a read-only filesystem, all capabilities dropped and 96 MB of memory.
-4. **Update later:** `deploy/update.sh` (service). Updating the mod restarts the game and players
-   re-sync mods when they next join.
+   Make a token (any machine with Python; the script has no dependencies):
+   ```sh
+   curl -fsSLO "$base/scripts/new-token.py"
+   python3 new-token.py --name alice --nick AliceInGame   # prints the token once and a tokens.toml block
+   ```
+   Put the block into `tokens.toml`, give the token to that person, then
+   `docker compose -f docker-compose.mcp.yml up -d`. Read the downloaded files before running them.
+   Set `FACTORIO_MCP_VERSION` in `.env` to a release number to pin the image. The container runs as
+   a non-root user with a read-only filesystem, all capabilities dropped and 96 MB of memory.
+4. **Update later:** `./update.sh` pulls the image and restarts the service. Updating the mod
+   restarts the game and players re-sync mods when they next join.
 
 Settings are environment variables (`deploy/.env.example`): `FACTORIO_MCP_HOST`, `FACTORIO_MCP_PORT`,
 `FACTORIO_MCP_ALLOWED_HOSTS` (set it whenever the service is reachable by anything but localhost),

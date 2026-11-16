@@ -1,4 +1,7 @@
 FROM python:3.13-alpine
+LABEL org.opencontainers.image.source="https://github.com/OLDIN/factorio-mcp" \
+      org.opencontainers.image.description="Read-only MCP server for Factorio 2.1" \
+      org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 COPY pyproject.toml ./
 COPY factorio_mcp ./factorio_mcp

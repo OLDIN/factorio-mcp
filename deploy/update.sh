@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Update the factorio-mcp service on the server (run from a clone of the repository):
-#   deploy/update.sh        pull, rebuild and restart the container if the code changed
+# Update the factorio-mcp service next to the Factorio server (run from the folder that holds
+# docker-compose.mcp.yml and .env):
+#   ./update.sh        pull the image named in .env (FACTORIO_MCP_VERSION) and restart if it changed
 #
 # The mod is updated separately, the way you install mods on your Factorio server (the game
-# restarts and players re-sync). Set ADD_MODS_SCRIPT to a script that takes the mod name to run
-# it here: `ADD_MODS_SCRIPT=/path/to/script deploy/update.sh mod`.
+# restarts and players re-sync). Set ADD_MODS_SCRIPT to a script that takes a mod name to run it
+# from here: `ADD_MODS_SCRIPT=/path/to/script ./update.sh mod`.
 set -euo pipefail
 
-REPO=$(cd "$(dirname "$0")/.." && pwd)
-COMPOSE=("$REPO/deploy/docker-compose.mcp.yml")
+cd "$(dirname "$0")"
+COMPOSE=(docker compose -f docker-compose.mcp.yml)
 WHAT=${1:-service}
 
 case $WHAT in
   service)
-    git -C "$REPO" pull --ff-only --quiet
-    echo "code: $(git -C "$REPO" log -1 --format='%h %s (%cr)')"
-    (cd "$REPO/deploy" && docker compose -f "${COMPOSE[0]}" up -d --build)
+    "${COMPOSE[@]}" pull
+    "${COMPOSE[@]}" up -d
     sleep 3
     docker logs factorio-mcp --tail 5
     ;;
