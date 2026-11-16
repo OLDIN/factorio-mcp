@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import time
@@ -20,7 +21,7 @@ from .config import Settings
 from .identity import current_identity, reset_identity, set_identity
 from .instructions import INSTRUCTIONS
 from .tokens import TokenStore
-from .tools import players, server
+from .tools import players, reference, server
 from .tools.registry import ToolSpec, visible
 
 _LOGGER = logging.getLogger(__name__)
@@ -71,13 +72,14 @@ def _security(settings: Settings) -> TransportSecuritySettings | None:
     return TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=hosts, allowed_origins=[])
 
 
-def _wrap(spec: ToolSpec) -> Callable[[], Awaitable[Any]]:
-    async def run() -> Any:
+def _wrap(spec: ToolSpec) -> Callable[..., Awaitable[Any]]:
+    @functools.wraps(spec.handler)  # the SDK derives the tool's input schema from the signature
+    async def run(**kwargs: Any) -> Any:
         identity = current_identity()
         started = time.monotonic()
         outcome = "ok"
         try:
-            return await spec.handler()
+            return await spec.handler(**kwargs)
         except ModMissing:
             outcome = "error"
             raise ToolError("The factorio-mcp mod is not installed on the game server.") from None
@@ -98,7 +100,7 @@ def _wrap(spec: ToolSpec) -> Callable[[], Awaitable[Any]]:
 
 def create_app(settings: Settings, bridge: ModBridge, tokens: TokenStore) -> ASGIApp:
     mcp = MCPServer("factorio-mcp", instructions=INSTRUCTIONS)
-    all_specs = [*server.specs(bridge), *players.specs(bridge)]
+    all_specs = [*server.specs(bridge), *players.specs(bridge), *reference.specs(bridge)]
     registered: set[str] = set()
 
     def sync_tools(hello: Hello | None) -> None:

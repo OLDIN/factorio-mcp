@@ -128,3 +128,9 @@ Pinned: `mcp==2.3.0`, `uvicorn==0.54.0` (starlette 1.10.0 comes with `mcp`). The
 - Official `mcp` client (Streamable HTTP, Bearer) against the service and a real Factorio 2.1.24: `server_status` returns the mod list (`base`, `factorio-mcp`), `list_players` returns a list; no token -> 401; token removed from the file -> 401 without restart (`server/tests/live/test_e2e_live.py`).
 - Claude Code (`claude --mcp-config <temp json> --strict-mcp-config -p ...`) answered "who is online and which mods" from live data; the audit log showed `who=<name> tool=server_status`.
 - Factorio 2.1.24 encodes an empty Lua table as `{}` (observed for `players`, not `[]`). The service therefore normalizes list fields with `bridge.normalize_lists`; fields that are maps use `normalize_maps`.
+
+## Reference data (Task 9)
+
+- Full cache fill over RCON on the real save with the full mod set (Space Age + 7 modded planets), pages capped at the 48000-byte budget: recipes 2951 (401 ms), machines 71 (19 ms), items 755 (68 ms), fluids 59 (12 ms), modules 40 (23 ms), qualities 6 (10 ms), technologies 508 (157 ms), planets 18 (12 ms). Vanilla + Space Age dev save: recipes 442 in 84 ms. The cache is filled once per mod-set fingerprint, so the cost is paid once.
+- In Factorio 2.1.24 `get_crafting_speed` / `get_max_health` on an entity prototype need an explicit quality (`"normal"`): without one they raise `Invalid QualityID` although the docs mark it optional. Methods are bound: call `obj.method(args)`, never `obj.method(obj, args)`.
+- Empty Lua tables are encoded as `{}` by `helpers.table_to_json`, so list fields come back as `{}` when empty; `ReferenceCache` normalizes them.
