@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Review Focus 2: save the game in the middle of a tick-split job, stop, start from that save:
 # the job must continue to the end (tick handler re-registered by on_load) with no errors in the log.
+# The first run is auto-paused (no players), so the tick job cannot progress while it is saved; the
+# second run is not paused, so it only finishes if on_load brought the tick handler back.
 # Works on a copy of the real save under dev/reload/ (never touches the original).
 #
 #   scripts/live-job-reload.sh              # real save with the synced mods
@@ -16,8 +18,8 @@ LOG="$ROOT/dev/write/factorio-current.log"
 rm -rf "$RELOAD"; mkdir -p "$RELOAD"
 cp "$SAVE_SRC" "$RELOAD/reload.zip"
 
-start_server() {
-  AUTO_PAUSE=false SPACE_AGE=true SAVE="$RELOAD/reload.zip" MODS_FROM="$MODS_FROM" \
+start_server() {  # $1 = AUTO_PAUSE true|false
+  AUTO_PAUSE=$1 SPACE_AGE=true SAVE="$RELOAD/reload.zip" MODS_FROM="$MODS_FROM" \
     "$ROOT/scripts/dev-server.sh" > "$ROOT/dev/live-reload-server.log" 2>&1 &
   SERVER_PID=$!
   for _ in $(seq 1 240); do
@@ -30,13 +32,13 @@ start_server() {
 stop_server() { kill -INT "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; }
 trap stop_server EXIT
 
-echo "== first run: start a job and save while it runs"
-start_server
+echo "== first run (paused): start a job and save while it runs"
+start_server true
 "$PY" "$ROOT/scripts/job-reload-check.py" start-and-save
 stop_server
 
-echo "== second run: load that save; the job must continue"
-start_server
+echo "== second run (running): load that save; the job must continue"
+start_server false
 "$PY" "$ROOT/scripts/job-reload-check.py" finish
 stop_server
 trap - EXIT

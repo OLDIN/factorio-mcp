@@ -50,11 +50,11 @@ _G.storage = { mcp = done_state }  -- plain table again: the job is started like
 local kinds = require("scripts.logic.job_kinds")
 local real_stepper = kinds.stepper
 kinds.stepper = function() return { chunk = function() end, finish = function() return { fields = {} } end } end
-engine.start(done_state, "machines_overview", {}, 5, { surfaces = { "nauvis" }, chunks = { 1, 0, 0, 1, 1, 0 }, acc = {}, mode = "ticks" })
+engine.start(done_state, "machines_overview", {}, 5, { surfaces = { "nauvis" }, work = { 1, 0, 0, 32, 1, 32, 0, 32 }, acc = {}, mode = "ticks" })
 jobs.sync_handler()
 assert(e.handlers[0] ~= nil)
 jobs.on_tick({ tick = 6 })
--- the default is 8 chunks per tick, so the 2-chunk job finishes on this tick and the handler goes away
+-- the default budget covers both areas, so the job finishes on this tick and the handler goes away
 assert(done_state.jobs[1].state == "done" and e.handlers[0] == nil)
 kinds.stepper = real_stepper
 

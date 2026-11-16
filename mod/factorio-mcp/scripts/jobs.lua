@@ -20,6 +20,7 @@ end
 -- Creates the state on first use. Never call from on_load (storage must not be written there).
 function M.state()
   if not storage.mcp then storage.mcp = engine.new() end
+  engine.migrate(storage.mcp)
   return storage.mcp
 end
 
@@ -46,7 +47,7 @@ function M.on_tick(event)
   if not state then return M.sync_handler() end
   for _, job in ipairs(state.jobs) do
     if job.state == "running" and job.mode == "ticks" then
-      local done = engine.step(state, job.id, setting("factorio-mcp-chunks-per-tick", 8), kinds.stepper(job.kind), event.tick)
+      local done = engine.step(state, job.id, setting("factorio-mcp-work-per-tick", 50), kinds.stepper(job.kind), event.tick)
       if done then M.sync_handler() end
       return
     end
@@ -57,7 +58,7 @@ end
 -- Idle mode: nobody is online (the game may be paused), so each poll does a bigger batch.
 function M.step_idle(job)
   local state = M.state()
-  local done = engine.step(state, job.id, setting("factorio-mcp-idle-chunks-per-poll", 512), kinds.stepper(job.kind), game.tick)
+  local done = engine.step(state, job.id, setting("factorio-mcp-idle-work-per-poll", 20000), kinds.stepper(job.kind), game.tick)
   if done then M.sync_handler() end
   return done
 end

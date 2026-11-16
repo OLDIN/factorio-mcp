@@ -100,6 +100,17 @@ async def test_big_area_matches_the_synchronous_scan(rcon):
     assert [g["name"] for g in page["groups"]] == [g["name"] for g in sync["groups"]]
 
 
+async def test_measure_ticks_mode_wall_time(rcon, capsys):
+    bridge = ModBridge(rcon)
+    if (await bridge.call("server_info"))["paused"]:
+        pytest.skip("ticks mode cannot advance while the game is paused")
+    started = await bridge.call("job_start", {"kind": "machines_overview", "mode": "ticks"})
+    t0 = time.monotonic()
+    page, polls = await drain(bridge, started["job_id"])
+    with capsys.disabled():
+        print(f"\nticks mode: areas={started['work_items']} wall={(time.monotonic() - t0) * 1000:.0f} ms summary={page['summary']}")
+
+
 async def test_measure_job_costs(rcon, capsys):
     bridge = ModBridge(rcon)
     started = await bridge.call("job_start", {"kind": "machines_overview", "mode": "idle"})
@@ -108,7 +119,7 @@ async def test_measure_job_costs(rcon, capsys):
     elapsed = time.monotonic() - t0
     with capsys.disabled():
         print(
-            f"\njob machines_overview: chunks={started['total_chunks']} polls={polls} "
+            f"\njob machines_overview: areas={started['work_items']} polls={polls} "
             f"wall={elapsed * 1000:.0f} ms summary={page['summary']}"
         )
     t0 = time.monotonic()
@@ -123,11 +134,11 @@ async def test_soft_wait_then_resume_on_a_big_base(rcon, capsys):
 
     bridge = ModBridge(rcon)
     runner = JobRunner(bridge)
-    first = await runner.run("machines_overview", {}, poll=0.05, wait=0.2)
+    first = await runner.run("machines_overview", {}, "live", poll=0.05, wait=0.2)
     if first.get("status") != "running":
         pytest.skip("the base is small enough to finish within the soft wait")
-    assert first["job_id"] > 0 and 0 <= first["progress"] <= 1
-    final = await runner.run("machines_overview", {}, poll=0.05, wait=60, job_id=first["job_id"])
+    assert isinstance(first["job_id"], str) and 0 <= first["progress"] <= 1
+    final = await runner.run("machines_overview", {}, "live", poll=0.05, wait=60, handle=first["job_id"])
     assert "summary" in final and "status" not in final
     with capsys.disabled():
         print(f"\nsoft wait -> running at {first['progress']}, resumed -> {final['summary']}")

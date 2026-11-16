@@ -41,8 +41,8 @@ async def start_and_save() -> int:
     mine = next((j for j in status["jobs"] if j["id"] == started["job_id"]), None)
     progress = mine["progress"] if mine else None
     print(f"saved while running: job {started['job_id']} progress={progress}")
-    if mine is None or mine["state"] != "running":
-        print("FAIL: the job finished before the save; nothing was tested")
+    if mine is None or mine["state"] != "running" or progress > 0.5:
+        print("FAIL: the job is not still early in its run right after the save; nothing was tested")
         return 1
     task.cancel()
     return 0

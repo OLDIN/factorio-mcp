@@ -48,7 +48,7 @@ dispatcher.register("job_start", function(params)
   plan.mode = mode or (#game.connected_players == 0 and "idle" or "ticks")
   local id = engine.start(state, kind, plan.params or params.params or {}, game.tick, plan)
   jobs.sync_handler()
-  return { job_id = id, mode = plan.mode, total_chunks = math.floor(#plan.chunks / 3) }
+  return { job_id = id, mode = plan.mode, work_items = math.floor(#plan.work / 4) }
 end)
 
 dispatcher.register("job_result", function(params)

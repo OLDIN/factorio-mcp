@@ -149,3 +149,25 @@ Pinned: `mcp==2.3.0`, `uvicorn==0.54.0` (starlette 1.10.0 comes with `mcp`). The
 - `storage.mcp` holds plain data only: the chunk list is a flat number array (3 numbers per chunk, ~78k numbers for this save while a job runs, dropped when it finishes). Finished results live for 36,000 ticks and at most 8 are kept.
 - Save/load in the middle of a job (`scripts/live-job-reload.sh`, copy of the real save, game running): the save made while the job ran restored the job and its `on_tick` handler through `on_load`, the job finished, the handler was removed, and the game log had no errors. This test also showed the dev save persisting job state between runs, which is why the live tests cancel leftover jobs first.
 - Areas: radius up to 64 tiles is answered at once; larger radii (up to a sanity bound of 1000) run as a job (`area` kind) and the answer matches the synchronous scan (live test).
+
+
+## Block-counting scan (replaces the chunk-by-chunk scan)
+
+The first job design visited every generated chunk (8 per tick). On a real server with 16 surfaces a
+whole-base overview took ~109 s with a player online, longer than an MCP client waits for a reply.
+Measurements on the real save (nauvis, 26,099 chunks, 3,015 machines/drills):
+
+- Game API costs: `get_chunks` over all chunks 23 ms (one-off at job start), `count_entities_filtered`
+  of a 512x512 block 0.28 ms (about 1 us per chunk), of a single chunk 5 us, `find_entities_filtered`
+  4.5 us per entity. The old job spent ~0.9 s because of its own Lua overhead (a closure and a
+  `pcall` per read) and because 26k mostly empty chunks were each queried.
+- New scan (count blocks, skip empty, split crowded, read small areas, one `pcall` per entity):
+  165 blocks, **3.2 s** in `ticks` mode at 50 units per tick (was ~55 s), **77 ms** in `idle` mode
+  (was 1.7 s). About 6.5 microseconds per work unit, so 50 units per tick is about 0.33 ms.
+- Accuracy: the job's machine total equals a direct `count_entities_filtered` of the whole surface
+  (3,015 = 3,015, per-type 678 assemblers, 1,175 furnaces, 1,147 drills, 15 silos).
+- Save/load in the middle of a job still resumes (`scripts/live-job-reload.sh`: the first run is
+  auto-paused, so the job cannot progress while it is saved; the second, running server only finishes
+  it if `on_load` brought the tick handler back).
+- The `get_chunks` pass (23 ms for this surface) is a single-tick cost at `job_start`; it scales with
+  the number of generated chunks of the requested surfaces.

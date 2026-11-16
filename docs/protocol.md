@@ -36,7 +36,7 @@ The reply is a single line of JSON printed with `rcon.print`:
 | `players` | none | `{players: [{name, index, online, admin, afk_ticks, online_ticks, color, position, surface}]}`; position and surface are `null` for offline players |
 | `proto_recipes`, `proto_machines`, `proto_items`, `proto_fluids`, `proto_modules`, `proto_qualities`, `proto_technologies`, `proto_planets` | `{offset?, limit?}` | `{kind, total, offset, items, next}`; a page stops at the response budget, `next` is the offset of the following page or absent |
 | `area` | `{player}` or `{surface, x, y}`; `radius?` (default 32, at most 64), `max_listed?` (default 20) | machines and drills around a point: `{center, radius, totals, groups, stopped, drills, truncated}` |
-| `job_start` | `{kind, params?, mode?}` | `{job_id, mode, total_chunks}` |
+| `job_start` | `{kind, params?, mode?}` | `{job_id, mode, work_items}` |
 | `job_result` | `{job_id, offset?, limit?}` | `{state: "running", mode, progress}`, `{state: "cancelled"}`, or `{state: "done", ...result fields, next?}` |
 | `job_cancel` | `{job_id}` | `{cancelled}` |
 | `job_status` | none | `{jobs: [{id, kind, state, mode, progress}], tick_handler_registered}` |
@@ -58,10 +58,18 @@ Large queries run as jobs spread over game ticks so players do not feel them.
 
 - `job_start` kinds: `machines_overview` (`params: {surfaces?: [name]}`, the whole map) and `area`
   (`params: {surface, x, y, radius, max_listed?}`, radius up to 1000).
-- `mode`: `ticks` (a few chunks per game tick, setting `factorio-mcp-chunks-per-tick`) or `idle`
-  (the job advances only when polled, `factorio-mcp-idle-chunks-per-poll`). The default is `idle`
-  when nobody is online, which also works when the game is paused. A caller may force either.
-- Poll `job_result` until `state` is `done`. Results are paged with `offset` and `next`; the job is
-  removed after its last page. Unfetched results expire after 36,000 ticks; at most 8 are kept,
-  at most 4 jobs run at once.
-- Job state lives in `storage` as plain data, so a save made mid-job resumes after loading.
+- **Method.** The map is cut into 512-tile blocks. A block's allowlisted entities are counted (cheap);
+  an empty block is skipped, a crowded one (more than 40 entities) is split into four quarters, and
+  entities are read only from small areas. An entity belongs to the area its position lies in, so it
+  is read once. Empty map costs almost nothing: a whole base takes seconds, not minutes.
+- **Budget.** Work is measured in units of about 10 microseconds (counting an area costs about as
+  much as the chunks in it, reading an entity costs a few units). `mode: ticks` spends
+  `factorio-mcp-work-per-tick` units per tick (default 50, about a third of a millisecond);
+  `mode: idle` spends `factorio-mcp-idle-work-per-poll` per `job_result` poll. The default mode is
+  `idle` when nobody is online, which also works when the game is paused. A caller may force either.
+- Poll `job_result` until `state` is `done`; `progress` is the share of the map area finished.
+  Results are paged with `offset` and `next`; the job is removed after its last page. Unfetched
+  results expire after 36,000 ticks; at most 8 are kept, at most 4 jobs run at once, and a surface
+  whose generated chunks span more than 250,000 chunks is refused.
+- Job state lives in `storage` as plain data, so a save made mid-job resumes after loading. Jobs
+  saved by an older mod version are migrated (a running one is cancelled).

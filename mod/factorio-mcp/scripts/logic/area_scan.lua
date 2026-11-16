@@ -66,27 +66,27 @@ local function enrich_entity(record, entity)
 end
 
 -- Plain record of one allowlisted entity; `center` (optional) adds the distance to it.
+-- Plain field reads in one function: callers wrap it in a single pcall (no closure per read).
 function M.record_of(entity, center)
   local pos = entity.position
+  local etype = entity.type
   local record = {
-    name = entity.name, type = entity.type, x = pos.x, y = pos.y,
-    status = statuses.name(read(entity, "status")),
+    name = entity.name, type = etype, x = pos.x, y = pos.y,
+    status = statuses.name(entity.status), dist = 0,
   }
   if center then
     local dx, dy = pos.x - center.x, pos.y - center.y
     record.dist = math.sqrt(dx * dx + dy * dy)
-  else
-    record.dist = 0
   end
-  if entity.type == "mining-drill" then
-    local target = read(entity, "mining_target")
+  if etype == "mining-drill" then
+    local target = entity.mining_target
     if target then
-      record.resource = read(target, "name")
-      record.remaining = read(target, "amount")
+      record.resource = target.name
+      record.remaining = target.amount
     end
-  else
-    local ok, recipe = pcall(function() return entity.get_recipe() end)
-    if ok and recipe then record.recipe = recipe.name end
+  elseif etype == "assembling-machine" or etype == "furnace" or etype == "rocket-silo" then
+    local recipe = entity.get_recipe()  -- labs and agricultural towers have no recipe
+    if recipe then record.recipe = recipe.name end
   end
   return record
 end
@@ -113,9 +113,11 @@ function M.scan(surface, center, radius, max_listed, budget_bytes)
   local acc = area_group.new(max_listed)
   local entity_of = {}
   for _, entity in ipairs(entities) do
-    local record = M.record_of(entity, center)
-    entity_of[record] = entity
-    area_group.add(acc, record)
+    local ok, record = pcall(M.record_of, entity, center)
+    if ok then
+      entity_of[record] = entity
+      area_group.add(acc, record)
+    end
   end
   return area_group.finish(acc, budget_bytes, function(record)
     return enrich_entity(record, entity_of[record])
