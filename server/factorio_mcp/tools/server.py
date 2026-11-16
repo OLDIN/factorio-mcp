@@ -7,7 +7,7 @@ from .registry import ToolSpec
 
 
 def specs(bridge: ModBridge) -> list[ToolSpec]:
-    async def server_status() -> dict[str, Any]:
+    async def server_status(details: bool = False) -> dict[str, Any]:
         try:
             info = await bridge.call("server_info")
         except ModMissing:
@@ -15,6 +15,9 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         except GameUnavailable:
             return {"status": "game unavailable"}
         hello = bridge.last_hello
+        if not details:  # map and mod settings are ~25 KB and rarely needed
+            for key in ("map_settings", "map_gen_settings", "mod_settings"):
+                info.pop(key, None)
         return {
             "status": "ok",
             "mod_version": hello.mod_version if hello else None,

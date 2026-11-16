@@ -62,3 +62,14 @@ async def test_audit_line_has_who_tool_ms_and_no_arguments(stack, caplog):
     assert len(lines) == 1
     assert lines[0].startswith("who=alice tool=list_players ms=") and lines[0].endswith("outcome=ok")
     assert "XYZZY" not in caplog.text
+
+
+async def test_server_status_leaves_out_big_settings_unless_asked(stack):
+    big = {"v": 1, "ok": True, "result": {"tick": 5, "mods": {"base": "2.1.24"},
+           "map_settings": {"x": 1}, "map_gen_settings": {"y": 2}, "mod_settings": {"startup": {"z": 3}}}}
+    stack.reply("server_info", big)
+    brief = json.loads((await _call(stack, "server_status"))["content"][0]["text"])
+    assert brief["mods"] == {"base": "2.1.24"} and "map_settings" not in brief and "mod_settings" not in brief
+    stack.reply("server_info", big)
+    full = json.loads((await _call(stack, "server_status", {"details": True}))["content"][0]["text"])
+    assert full["map_settings"] == {"x": 1} and full["mod_settings"]["startup"] == {"z": 3}

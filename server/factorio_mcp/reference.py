@@ -115,3 +115,101 @@ def paginate(items: list[dict[str, Any]], limit: int, offset: int) -> dict[str, 
     chunk = items[offset : offset + limit]
     more = offset + limit < len(items)
     return {"total": len(items), "offset": offset, "items": chunk, "next": offset + limit if more else None}
+
+
+# --- Brief rows -----------------------------------------------------------------------------
+# Lists and searches answer with short rows (an LLM reads every character it receives); the full
+# record of one thing comes with `name=`. A row keeps what is needed to pick the right thing.
+
+_MAX_ENTRIES = 8  # ingredients/products/effects shown per row; the rest is counted
+
+
+def _num(value: Any) -> str:
+    return f"{value:g}" if isinstance(value, (int, float)) else str(value)
+
+
+def _entry(entry: dict[str, Any]) -> str:
+    """'2 iron-plate', '1-3 stone', '0.5 coal (10%)'."""
+    if "amount" in entry:
+        amount = _num(entry["amount"])
+    else:
+        amount = f"{_num(entry.get('amount_min', '?'))}-{_num(entry.get('amount_max', '?'))}"
+    text = f"{amount} {entry.get('name', '?')}"
+    chance = entry.get("probability", entry.get("independent_probability"))
+    if isinstance(chance, (int, float)) and chance < 1:
+        text += f" ({chance * 100:g}%)"
+    return text
+
+
+def _short(items: list[str]) -> list[str]:
+    if len(items) <= _MAX_ENTRIES:
+        return items
+    return [*items[:_MAX_ENTRIES], f"+{len(items) - _MAX_ENTRIES} more"]
+
+
+def brief_recipe(r: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": r["name"],
+        "categories": r.get("categories", []),
+        "time": r.get("energy"),
+        "in": _short([_entry(e) for e in r.get("ingredients", [])]),
+        "out": _short([_entry(e) for e in r.get("products", [])]),
+    }
+
+
+def brief_machine(m: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": m["name"],
+        "categories": [*m.get("crafting_categories", []), *m.get("resource_categories", [])],
+        "crafting_speed": m.get("crafting_speed"),
+        "module_slots": m.get("module_slots"),
+        "energy_usage": m.get("energy_usage"),
+    }
+
+
+def brief_item(i: dict[str, Any]) -> dict[str, Any]:
+    row = {"name": i["name"], "type": i.get("type"), "stack_size": i.get("stack_size")}
+    if i.get("fuel_value"):
+        row["fuel_value"] = i["fuel_value"]
+    return row
+
+
+def brief_fluid(f: dict[str, Any]) -> dict[str, Any]:
+    return {"name": f["name"], "default_temperature": f.get("default_temperature"),
+            "max_temperature": f.get("max_temperature")}
+
+
+def brief_technology(t: dict[str, Any]) -> dict[str, Any]:
+    cost = ", ".join(_entry(e) for e in t.get("ingredients", []))
+    unlocks = [e["recipe"] for e in t.get("effects", []) if e.get("type") == "unlock-recipe" and "recipe" in e]
+    other = [e["type"] for e in t.get("effects", []) if e.get("type") != "unlock-recipe" and "type" in e]
+    row = {
+        "name": t["name"],
+        "prerequisites": t.get("prerequisites", []),
+        "cost": f"{_num(t.get('unit_count'))} x [{cost}]" if cost else "trigger",
+        "unlocks": _short(unlocks),
+    }
+    if other:
+        row["other_effects"] = _short(sorted(set(other)))
+    if t.get("max_level") and t["max_level"] > 1:
+        row["max_level"] = t["max_level"]
+    return row
+
+
+_KEY_PLANET_PROPERTIES = ("gravity", "pressure", "solar-power", "temperature", "magnetic-field", "day-night-cycle")
+
+
+def brief_planet(p: dict[str, Any]) -> dict[str, Any]:
+    props = p.get("surface_properties", {})
+    return {
+        "name": p["name"],
+        "type": p.get("type"),
+        "distance": p.get("distance"),
+        **{k: props[k] for k in _KEY_PLANET_PROPERTIES if k in props},
+    }
+
+
+BRIEF = {
+    "recipes": brief_recipe, "machines": brief_machine, "items": brief_item, "fluids": brief_fluid,
+    "technologies": brief_technology, "planets": brief_planet,
+}
