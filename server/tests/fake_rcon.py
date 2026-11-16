@@ -17,6 +17,8 @@ class FakeRcon:
     def __init__(self, password: str = "secret") -> None:
         self.password = password
         self.responses: dict[str, str] = {}
+        # command -> replies served in order (the last one repeats); wins over `responses`
+        self.sequences: dict[str, list[str]] = {}
         self.silent: set[str] = set()
         self.received: list[str] = []
         self.port = 0
@@ -51,7 +53,12 @@ class FakeRcon:
                     self.received.append(body)
                     if body in self.silent:
                         continue
-                    writer.write(packet(req_id, RESPONSE, self.responses.get(body, "")))
+                    queue = self.sequences.get(body)
+                    if queue:
+                        reply = queue.pop(0) if len(queue) > 1 else queue[0]
+                    else:
+                        reply = self.responses.get(body, "")
+                    writer.write(packet(req_id, RESPONSE, reply))
                 await writer.drain()
         except (asyncio.IncompleteReadError, ConnectionError):
             pass

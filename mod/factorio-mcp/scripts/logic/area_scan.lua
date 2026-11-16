@@ -54,16 +54,53 @@ end
 local INPUTS = { "crafter_input", "lab_input", "agricultural_tower_input", "fuel" }
 local OUTPUTS = { "crafter_output", "agricultural_tower_output" }
 
-local function enrich(entity_by_unit)
-  return function(record)
-    local entity = entity_by_unit[record]
-    if entity and record.type ~= "mining-drill" then
-      record.crafting_progress = read(entity, "crafting_progress")
-      local ok, modules = pcall(function() return entity.get_module_inventory() end)
-      record.modules = ok and contents(modules) or nil
-      record.input = merged(entity, INPUTS)
-      record.output = merged(entity, OUTPUTS)
+local function enrich_entity(record, entity)
+  if entity and record.type ~= "mining-drill" then
+    record.crafting_progress = read(entity, "crafting_progress")
+    local ok, modules = pcall(function() return entity.get_module_inventory() end)
+    record.modules = ok and contents(modules) or nil
+    record.input = merged(entity, INPUTS)
+    record.output = merged(entity, OUTPUTS)
+  end
+  return record
+end
+
+-- Plain record of one allowlisted entity; `center` (optional) adds the distance to it.
+function M.record_of(entity, center)
+  local pos = entity.position
+  local record = {
+    name = entity.name, type = entity.type, x = pos.x, y = pos.y,
+    status = statuses.name(read(entity, "status")),
+  }
+  if center then
+    local dx, dy = pos.x - center.x, pos.y - center.y
+    record.dist = math.sqrt(dx * dx + dy * dy)
+  else
+    record.dist = 0
+  end
+  if entity.type == "mining-drill" then
+    local target = read(entity, "mining_target")
+    if target then
+      record.resource = read(target, "name")
+      record.remaining = read(target, "amount")
     end
+  else
+    local ok, recipe = pcall(function() return entity.get_recipe() end)
+    if ok and recipe then record.recipe = recipe.name end
+  end
+  return record
+end
+
+-- Enrichment for a record whose entity is no longer at hand (tick-split jobs keep plain data
+-- only): find it again by position. The query still uses the allowlisted types only.
+function M.enricher_by_position(surface)
+  return function(record)
+    local ok, found = pcall(function()
+      return surface.find_entities_filtered({
+        position = { x = record.x, y = record.y }, radius = 0.5, name = record.name, limit = 1,
+      })
+    end)
+    if ok and found and found[1] then enrich_entity(record, found[1]) end
     return record
   end
 end
@@ -73,28 +110,16 @@ function M.scan(surface, center, radius, max_listed, budget_bytes)
   local entities = surface.find_entities_filtered({
     position = { x = center.x, y = center.y }, radius = radius, type = M.AREA_TYPES,
   })
-  local records, entity_of = {}, {}
+  local acc = area_group.new(max_listed)
+  local entity_of = {}
   for _, entity in ipairs(entities) do
-    local pos = entity.position
-    local dx, dy = pos.x - center.x, pos.y - center.y
-    local record = {
-      name = entity.name, type = entity.type, x = pos.x, y = pos.y,
-      dist = math.sqrt(dx * dx + dy * dy), status = statuses.name(read(entity, "status")),
-    }
-    if entity.type == "mining-drill" then
-      local target = read(entity, "mining_target")
-      if target then
-        record.resource = read(target, "name")
-        record.remaining = read(target, "amount")
-      end
-    else
-      local ok, recipe = pcall(function() return entity.get_recipe() end)
-      if ok and recipe then record.recipe = recipe.name end
-    end
-    records[#records + 1] = record
+    local record = M.record_of(entity, center)
     entity_of[record] = entity
+    area_group.add(acc, record)
   end
-  return area_group.build(records, max_listed, budget_bytes, enrich(entity_of))
+  return area_group.finish(acc, budget_bytes, function(record)
+    return enrich_entity(record, entity_of[record])
+  end)
 end
 
 return M

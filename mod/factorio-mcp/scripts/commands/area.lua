@@ -41,6 +41,9 @@ end
 dispatcher.register("area", function(params)
   local radius = number_param(params, "radius", 32)
   if radius <= 0 then error({ code = "bad_params", message = "radius must be positive" }) end
+  if radius > limits.MAX_SYNC_AREA_RADIUS then
+    error({ code = "bad_params", message = "radius above " .. limits.MAX_SYNC_AREA_RADIUS .. " must run as a job (job_start, kind area)" })
+  end
   local max_listed = number_param(params, "max_listed", 20)
   if max_listed < 1 or max_listed ~= math.floor(max_listed) then
     error({ code = "bad_params", message = "max_listed must be a positive integer" })

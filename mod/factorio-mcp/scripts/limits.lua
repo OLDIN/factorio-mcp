@@ -6,4 +6,8 @@ return {
   RESPONSE_BUDGET_BYTES = 48000,
   -- Largest "<sub> <json>" parameter string the dispatcher accepts (bytes).
   MAX_PARAM_BYTES = 1000,
+  -- `area` answers at once up to this radius (tiles); larger areas must run as a tick-split job.
+  MAX_SYNC_AREA_RADIUS = 64,
+  -- Sanity bound for a tick-split `area` job (cost grows with the area, spread over ticks).
+  MAX_JOB_AREA_RADIUS = 1000,
 }

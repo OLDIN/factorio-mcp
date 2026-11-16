@@ -23,6 +23,7 @@ ALLOWED_SUBS: frozenset[str] = frozenset(
         "job_start",
         "job_result",
         "job_cancel",
+        "job_status",
     }
 )
 
