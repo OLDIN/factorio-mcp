@@ -68,6 +68,14 @@ async def test_unknown_surface_and_offline_player(rcon):
     assert info.value.code == "not_found"
 
 
+async def test_synchronous_area_refuses_big_radius(rcon):
+    from factorio_mcp.bridge import ModError
+
+    with pytest.raises(ModError) as info:
+        await ModBridge(rcon).call("area", {"surface": "nauvis", "x": 0, "y": 0, "radius": 65})
+    assert info.value.code == "bad_params" and "job" in info.value.message
+
+
 async def test_area_on_real_base_is_fast_and_parses(rcon, capsys):
     await arm(rcon)
     found = await sc(rcon, """
@@ -79,7 +87,7 @@ if m then rcon.print(helpers.table_to_json({x = m.position.x, y = m.position.y})
     where = json.loads(found)
     bridge = ModBridge(rcon)
     timings = {}
-    for radius in (32, 64, 128, 256):
+    for radius in (32, 64):  # larger radii run as jobs (see test_jobs_live)
         started = time.monotonic()
         res = await bridge.call("area", {"surface": "nauvis", "x": where["x"], "y": where["y"], "radius": radius})
         timings[radius] = (round((time.monotonic() - started) * 1000), res["totals"]["machines"], res["truncated"])
