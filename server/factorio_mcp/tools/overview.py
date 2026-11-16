@@ -6,7 +6,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from .. import jobs
 from ..bridge import ModBridge, ModError, normalize_lists, normalize_maps
-from ..jobs import JobRunner
+from ..identity import current_identity
+from ..jobs import JobRunner, user_message
 from .registry import ToolSpec
 
 
@@ -17,18 +18,19 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
     runner = JobRunner(bridge)
 
     async def base_machines_overview(
-        surfaces: list[str] | None = None, job_id: int | None = None
+        surfaces: list[str] | None = None, job_id: str | None = None
     ) -> dict[str, Any]:
         params: dict[str, Any] = {}
         if surfaces is not None:
             params["surfaces"] = list(dict.fromkeys(surfaces))[:MAX_SURFACES]  # each surface once
         try:
-            result = await runner.run("machines_overview", params, wait=jobs.SOFT_TIMEOUT, job_id=job_id)
+            result = await runner.run(
+                "machines_overview", params, owner=current_identity().name, wait=jobs.SOFT_TIMEOUT, handle=job_id
+            )
         except ModError as err:
-            if err.code == "job_not_found":
-                raise ToolError(
-                    "That scan is gone (already collected, expired or cancelled). Start a new one without job_id."
-                ) from None
+            message = user_message(err)
+            if message:
+                raise ToolError(message) from None
             raise
         if result.get("status") == "running":
             return result

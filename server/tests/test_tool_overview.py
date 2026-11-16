@@ -86,7 +86,7 @@ async def test_duplicate_surfaces_are_sent_once(stack):
     assert start in stack.fake.received
 
 
-async def test_long_scan_answers_running_then_resumes_by_job_id(stack, monkeypatch):
+async def test_long_scan_answers_running_then_resumes_by_handle(stack, monkeypatch):
     from factorio_mcp import jobs
 
     monkeypatch.setattr(jobs, "SOFT_TIMEOUT", 0.1)
@@ -96,32 +96,53 @@ async def test_long_scan_answers_running_then_resumes_by_job_id(stack, monkeypat
     result_cmd = build_command("job_result", {"job_id": 5, "offset": 0})
     stack.fake.responses[result_cmd] = env({"state": "running", "mode": "ticks", "progress": 0.25})
     first = json.loads((await _call(stack, "base_machines_overview", {}))["content"][0]["text"])
-    assert first["status"] == "running" and first["job_id"] == 5 and first["progress"] == 0.25
+    assert first["status"] == "running" and first["progress"] == 0.25
+    handle = first["job_id"]
+    assert isinstance(handle, str) and handle != "5"
 
     stack.fake.responses[result_cmd] = env(
         {"state": "done", "summary": {"machines": 2, "working": 1, "groups": 1, "surfaces": 1}, "groups": [], "total": 0})
-    second = json.loads((await _call(stack, "base_machines_overview", {"job_id": 5}))["content"][0]["text"])
+    second = json.loads((await _call(stack, "base_machines_overview", {"job_id": handle}))["content"][0]["text"])
     assert second["summary"]["machines"] == 2 and "status" not in second
     assert sum(1 for c in stack.fake.received if c == start) == 1  # started once, resumed once
 
 
-async def test_vanished_job_gives_a_clear_message(stack, monkeypatch):
+async def test_a_guessed_or_foreign_handle_gets_the_same_clear_message(stack, monkeypatch):
+    from factorio_mcp import jobs
+    from stack_fixture import TOKEN_BOB
+
+    monkeypatch.setattr(jobs, "SOFT_TIMEOUT", 0.1)
     await _setup(stack)
-    stack.fake.responses[build_command("job_result", {"job_id": 9, "offset": 0})] = json.dumps(
-        {"v": 1, "ok": False, "error": {"code": "job_not_found", "message": "no such job"}})
-    res = await _call(stack, "base_machines_overview", {"job_id": 9})
-    assert res["isError"] is True and "gone" in res["content"][0]["text"]
+    start = build_command("job_start", {"kind": "machines_overview", "params": {}})
+    stack.fake.responses[start] = env({"job_id": 5, "mode": "ticks", "total_chunks": 99})
+    stack.fake.responses[build_command("job_result", {"job_id": 5, "offset": 0})] = env(
+        {"state": "running", "mode": "ticks", "progress": 0.25})
+    handle = json.loads((await _call(stack, "base_machines_overview", {}))["content"][0]["text"])["job_id"]
+    # bob (another token) cannot continue alice's scan; a guess fails the same way
+    for who, guess in ((TOKEN_BOB, handle), (None, "AAAAAAAAAAAA")):
+        r = await stack.rpc("tools/call", {"name": "base_machines_overview", "arguments": {"job_id": guess}},
+                            **({"token": who} if who else {}))
+        res = r.json()["result"]
+        assert res["isError"] is True and "gone" in res["content"][0]["text"]
 
 
-async def test_big_area_resumes_by_job_id(stack, monkeypatch):
+async def test_big_area_resumes_by_handle(stack, monkeypatch):
     from factorio_mcp import jobs
 
     monkeypatch.setattr(jobs, "SOFT_TIMEOUT", 0.1)
     await _setup(stack)
-    stack.fake.responses[build_command("job_result", {"job_id": 3, "offset": 0})] = env({
+    stack.fake.responses[build_command("players")] = env({"players": [
+        {"name": "aliceNick", "online": True, "position": {"x": 0, "y": 0}, "surface": "nauvis"}]})
+    start = build_command("job_start", {"kind": "area", "params": {"radius": 300.0, "surface": "nauvis", "x": 0, "y": 0}})
+    stack.fake.responses[start] = env({"job_id": 3, "mode": "ticks", "total_chunks": 9})
+    result_cmd = build_command("job_result", {"job_id": 3, "offset": 0})
+    stack.fake.responses[result_cmd] = env({"state": "running", "mode": "ticks", "progress": 0.5})
+    first = json.loads((await _call(stack, "inspect_area", {"radius": 300}))["content"][0]["text"])
+    assert first["status"] == "running"
+    stack.fake.responses[result_cmd] = env({
         "state": "done", "totals": {"machines": 1, "working": 1, "by_status": {"working": 1}}, "groups": [],
         "stopped": [], "drills": [], "truncated": False, "center": {"surface": "nauvis", "x": 0, "y": 0}, "radius": 300})
-    res = await _call(stack, "inspect_area", {"job_id": 3})
+    res = await _call(stack, "inspect_area", {"job_id": first["job_id"]})
     assert json.loads(res["content"][0]["text"])["totals"]["machines"] == 1
 
 

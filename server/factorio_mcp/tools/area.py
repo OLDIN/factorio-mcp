@@ -8,7 +8,7 @@ from .. import jobs
 from ..bridge import ModBridge, ModError, normalize_lists, normalize_maps
 from ..gps import GpsParseError, parse_gps
 from ..identity import current_identity
-from ..jobs import JobRunner
+from ..jobs import JobRunner, user_message
 from .registry import ToolSpec
 
 
@@ -18,14 +18,15 @@ SYNC_MAX_RADIUS = 64.0  # larger areas run as a tick-split job in the game
 def specs(bridge: ModBridge) -> list[ToolSpec]:
     runner = JobRunner(bridge)
 
-    async def finish(job_id: int | None, args: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def finish(job_id: str | None, args: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
-            result = await runner.run("area", args or {}, wait=jobs.SOFT_TIMEOUT, job_id=job_id)
+            result = await runner.run(
+                "area", args or {}, owner=current_identity().name, wait=jobs.SOFT_TIMEOUT, handle=job_id
+            )
         except ModError as err:
-            if err.code == "job_not_found":
-                raise ToolError(
-                    "That scan is gone (already collected, expired or cancelled). Start a new one without job_id."
-                ) from None
+            message = user_message(err)
+            if message:
+                raise ToolError(message) from None
             raise
         return result if result.get("status") == "running" else normalize(result)
 
@@ -40,7 +41,7 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         gps: str | None = None,
         player: str | None = None,
         radius: float = 32.0,
-        job_id: int | None = None,
+        job_id: str | None = None,
     ) -> dict[str, Any]:
         if job_id is not None:  # continue a scan that was still running
             return await finish(job_id)
