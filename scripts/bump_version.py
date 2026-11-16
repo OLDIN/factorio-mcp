@@ -251,7 +251,8 @@ def generate_changelog(commits: list[str], version: str) -> str:
     changelog += (
         "## 🔄 Update Instructions\n\n"
         "1. Mod: published to the Factorio mod portal automatically; players get it when they join\n"
-        "2. Service: `deploy/update.sh` (pulls and rebuilds the container); update the mod on the game server the way you install mods (the game restarts)\n"
+        "1b. Mod: update it on the game server the way you install mods (the game restarts)\n"
+        "2. Service: set `FACTORIO_MCP_VERSION` in `.env`, then `docker compose pull` and `up -d` (or `./update.sh`)\n"
     )
     return changelog
 
