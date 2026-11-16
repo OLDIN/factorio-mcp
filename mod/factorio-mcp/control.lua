@@ -7,6 +7,7 @@ require("scripts.commands.hello")
 require("scripts.commands.server_info")
 require("scripts.commands.players")
 require("scripts.commands.proto")
+require("scripts.commands.area")
 
 commands.add_command(
   "factorio-mcp",

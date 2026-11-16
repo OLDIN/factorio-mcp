@@ -134,3 +134,9 @@ Pinned: `mcp==2.3.0`, `uvicorn==0.54.0` (starlette 1.10.0 comes with `mcp`). The
 - Full cache fill over RCON on the real save with the full mod set (Space Age + 7 modded planets), pages capped at the 48000-byte budget: recipes 2951 (401 ms), machines 71 (19 ms), items 755 (68 ms), fluids 59 (12 ms), modules 40 (23 ms), qualities 6 (10 ms), technologies 508 (157 ms), planets 18 (12 ms). Vanilla + Space Age dev save: recipes 442 in 84 ms. The cache is filled once per mod-set fingerprint, so the cost is paid once.
 - In Factorio 2.1.24 `get_crafting_speed` / `get_max_health` on an entity prototype need an explicit quality (`"normal"`): without one they raise `Invalid QualityID` although the docs mark it optional. Methods are bound: call `obj.method(args)`, never `obj.method(obj, args)`.
 - Empty Lua tables are encoded as `{}` by `helpers.table_to_json`, so list fields come back as `{}` when empty; `ReferenceCache` normalizes them.
+
+## Area diagnostics (Task 10)
+
+- Entity allowlist: `assembling-machine`, `furnace`, `lab`, `mining-drill`, `rocket-silo`, `agricultural-tower` (the production types from the status scan above). `find_entities_filtered` is always called with exactly this `type` list, so characters, corpses, cars, spider vehicles, boats and modded vehicle types are never read (unit test `area_scan_test.lua`; live test puts a car with items and a dead character with items next to a machine and checks neither appears).
+- Round trip on the real save (RCON included), around the first assembling machine, `max_listed = 20`: radius 32: 4 ms, 21 machines; 64: 19 ms, 68; 128: 16 ms, 158; 256: 20 ms, 164 (lists truncated at 20, totals complete, reply < 48000 bytes). Same order as the in-game scan costs measured in Task 4.
+- Furnaces use the `crafter_input` / `crafter_output` inventories in 2.1 (no `furnace_source`).
