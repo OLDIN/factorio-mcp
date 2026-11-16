@@ -73,3 +73,14 @@ async def test_player_argument_targets_that_player(stack):
     stack.fake.responses[cmd] = json.dumps(AREA)
     await _call(stack, {"player": "carol"})
     assert _area_commands(stack) == [cmd]
+
+
+async def test_a_big_area_lists_only_the_most_stuck_groups(stack):
+    await _setup(stack)
+    groups = [{"name": f"m{i:03d}", "recipe": f"r{i}", "count": 5, "working": 5, "by_status": {"working": 5}} for i in range(40)]
+    groups.append({"name": "stuck", "recipe": "x", "count": 4, "working": 0, "by_status": {"full_output": 4}})
+    reply = dict(AREA["result"], groups=groups)
+    stack.fake.responses[build_command("area", {"radius": 32.0, "player": "aliceNick"})] = json.dumps(
+        {"v": 1, "ok": True, "result": reply})
+    data = json.loads((await _call(stack, {}))["content"][0]["text"])
+    assert len(data["groups"]) == 15 and data["groups"][0]["name"] == "stuck" and data["groups_omitted"] == 26
