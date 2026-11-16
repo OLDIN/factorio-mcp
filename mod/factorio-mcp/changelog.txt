@@ -1,4 +1,14 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.0
+Date: 2026-11-16
+  Features:
+    - Whole-base and big-area scans count 512-tile blocks, skip empty ones and split crowded ones: seconds instead of minutes at the same per-tick load.
+    - Settings renamed: factorio-mcp-work-per-tick (default 50) and factorio-mcp-idle-work-per-poll (default 20000).
+  Changes:
+    - job_start answers work_items instead of total_chunks.
+  Bugfixes:
+    - Jobs saved by 0.1.0 are migrated on load instead of failing.
+---------------------------------------------------------------------------------------------------
 Version: 0.1.0
 Date: 2026-11-13
   Features:
