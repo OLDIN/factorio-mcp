@@ -21,7 +21,7 @@ jobs:
     name: Mod (Lua 5.2 tests, luacheck)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Lua 5.2 and luacheck
         run: |
@@ -38,7 +38,7 @@ jobs:
     name: Server (ruff, pytest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -58,7 +58,7 @@ jobs:
     name: Hygiene (no private details in files or history)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the gate also scans history
 
