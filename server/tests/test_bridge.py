@@ -120,3 +120,12 @@ def test_normalize_maps_turns_list_into_dict():
     assert out["items"][1]["by_status"] == {"working": 1}
     assert out["top"] == {}
     assert out["keep"] == []
+
+
+def test_normalize_lists_turns_empty_dict_into_list():
+    from factorio_mcp.bridge import normalize_lists
+
+    data = {"players": {}, "full": [1], "nested": {"rows": {}}, "map": {"a": 1}}
+    out = normalize_lists(data, ["players", "nested.rows", "full", "map"])
+    assert out["players"] == [] and out["nested"]["rows"] == []
+    assert out["full"] == [1] and out["map"] == {"a": 1}

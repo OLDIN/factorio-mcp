@@ -41,30 +41,37 @@ class Hello:
 
 
 def normalize_maps(obj: Any, map_paths: Iterable[str]) -> Any:
-    """Turn `[]` (how Lua encodes an empty table) into `{}` at the given paths ('*' = any key/index)."""
+    """Turn `[]` (how Lua can encode an empty table) into `{}` at the given paths ('*' = any key/index)."""
     for path in map_paths:
-        _normalize(obj, path.split("."))
+        _normalize(obj, path.split("."), empty={}, when=[])
     return obj
 
 
-def _normalize(node: Any, parts: list[str]) -> None:
+def _normalize(node: Any, parts: list[str], empty: Any, when: Any) -> None:
+    """Replace an empty `when` value with a fresh copy of `empty` at the path."""
     head, rest = parts[0], parts[1:]
     if head == "*":
         children = list(node.values()) if isinstance(node, dict) else node if isinstance(node, list) else []
         for child in children:
             if rest:
-                _normalize(child, rest)
+                _normalize(child, rest, empty, when)
         if not rest and isinstance(node, dict):
             for key, value in node.items():
-                if value == []:
-                    node[key] = {}
+                if value == when and type(value) is type(when):
+                    node[key] = type(empty)()
         return
     if isinstance(node, dict) and head in node:
-        if not rest:
-            if node[head] == []:
-                node[head] = {}
-        else:
-            _normalize(node[head], rest)
+        if rest:
+            _normalize(node[head], rest, empty, when)
+        elif node[head] == when and type(node[head]) is type(when):
+            node[head] = type(empty)()
+
+
+def normalize_lists(obj: Any, list_paths: Iterable[str]) -> Any:
+    """Turn `{}` (how Factorio 2.1 encodes an empty Lua table) into `[]` at the given paths."""
+    for path in list_paths:
+        _normalize(obj, path.split("."), empty=[], when={})
+    return obj
 
 
 class ModBridge:
