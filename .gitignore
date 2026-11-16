@@ -12,6 +12,8 @@ __pycache__/
 .mypy_cache/
 # misc
 .DS_Store
+.superpowers/
 # deployment secrets
 deploy/.env
+.env
 deploy/tokens.toml

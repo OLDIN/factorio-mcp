@@ -21,12 +21,13 @@ local function redact_category(cat)
   if type(cat) ~= "table" then return cat end
   local out = {}
   for k, v in pairs(cat) do
-    if looks_secret(k) and is_string_value(v) then
-      -- omitted
-    elseif type(v) == "table" and v.value == nil then
-      out[k] = redact_category(v)
-    else
-      out[k] = v
+    -- secret-looking string settings are omitted entirely
+    if not (looks_secret(k) and is_string_value(v)) then
+      if type(v) == "table" and v.value == nil then
+        out[k] = redact_category(v)
+      else
+        out[k] = v
+      end
     end
   end
   return out

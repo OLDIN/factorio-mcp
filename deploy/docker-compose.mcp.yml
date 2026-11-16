@@ -1,0 +1,35 @@
+# The factorio-mcp service next to a Factorio server. Run from this directory:
+#   cp .env.example .env && cp tokens.example.toml tokens.toml   # then edit both
+#   docker compose -f docker-compose.mcp.yml up -d --build
+#
+# The service talks to the game over RCON on the same machine (host network), reads the RCON
+# password from the game's config file, and never writes to disk.
+services:
+  factorio-mcp:
+    build: ../server
+    container_name: factorio-mcp
+    network_mode: host
+    # The user that owns the RCON password file (the factoriotools image uses 845).
+    user: "${FACTORIO_MCP_UID:-845}:${FACTORIO_MCP_UID:-845}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 96m
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      FACTORIO_MCP_RCON_PASSWORD_FILE: /run/secrets/rconpw
+      FACTORIO_MCP_TOKENS_FILE: /run/secrets/tokens.toml
+    volumes:
+      - type: bind
+        source: ${FACTORIO_DATA_DIR:?set FACTORIO_DATA_DIR in .env}/config/rconpw
+        target: /run/secrets/rconpw
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./tokens.toml
+        target: /run/secrets/tokens.toml
+        read_only: true
+        bind:
+          create_host_path: false

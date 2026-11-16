@@ -1,0 +1,8 @@
+# One [[token]] block per person. Generate a block with:  scripts/new-token.py --name alice --nick AliceInGame
+# The file holds only the SHA-256 of each token, so it is safe to keep on the server.
+# Remove a block to revoke that person: the service re-reads the file, no restart needed.
+
+[[token]]
+name = "alice"        # who the token belongs to (appears in the audit log)
+nick = "AliceInGame"  # their player name in the game (used for "my position" style questions)
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"

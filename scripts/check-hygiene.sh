@@ -17,7 +17,12 @@ report() { echo "HYGIENE FAIL: $1" >&2; fail=1; }
 
 # label|flags|extended regex (no \b: it is not portable to BSD/macOS regex)
 PATTERNS=(
-  'private IPv4 range|-E|192\.168\.'
+  'private IPv4 range (192.168)|-E|192\.168\.'
+  'private IPv4 range (10/172.16-31)|-E|(^|[^0-9.])(10\.[0-9]+\.[0-9]+\.[0-9]+|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+\.[0-9]+)([^0-9]|$)'
+  'CGNAT / VPN address (100.64-127)|-E|(^|[^0-9.])100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]+\.[0-9]+'
+  'tailnet host name|-E|\.ts\.net'
+  'home directory path|-E|/Users/[A-Za-z]|/home/[a-z]'
+  'credential shape (GitHub, AWS, Slack, Atlassian, private key)|-E|ghp_[A-Za-z0-9]|github_pat_|gho_[A-Za-z0-9]|AKIA[0-9A-Z]{12}|xox[bp]-[0-9A-Za-z]|ATATT[A-Za-z0-9]|BEGIN [A-Z ]*PRIVATE KEY'
   'container number|-E|(^|[^A-Za-z0-9_])CT ?[0-9]{3}([^A-Za-z0-9_]|$)'
   'server data path|-E|/opt/factorio/data'
   'assistant co-author trailer|-Ei|Co-Authored-By'
