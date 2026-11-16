@@ -10,4 +10,7 @@ return {
   MAX_SYNC_AREA_RADIUS = 64,
   -- Sanity bound for a tick-split `area` job (cost grows with the area, spread over ticks).
   MAX_JOB_AREA_RADIUS = 1000,
+  -- A job's chunk list is built in one go and kept in `storage`: bound it, and bound how many run at once.
+  MAX_JOB_CHUNKS = 250000,
+  MAX_RUNNING_JOBS = 4,
 }

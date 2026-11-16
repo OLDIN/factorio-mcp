@@ -36,6 +36,13 @@ dispatcher.register("job_start", function(params)
   end
   local state = jobs.state()
   jobs.collect_garbage()
+  local running = 0
+  for _, job in ipairs(state.jobs) do
+    if job.state == "running" then running = running + 1 end
+  end
+  if running >= limits.MAX_RUNNING_JOBS then
+    error({ code = "too_many_jobs", message = "too many jobs are running; wait for one to finish" })
+  end
   local plan = kinds.plan(kind, params.params)
   -- nobody online: the game may be paused, so advance by polling instead of by ticks
   plan.mode = mode or (#game.connected_players == 0 and "idle" or "ticks")

@@ -32,15 +32,25 @@ local function plan_overview(params)
     names = sorted_surface_names()
   else
     if type(names) ~= "table" then bad("surfaces must be a list of names") end
+    local seen, unique = {}, {}
     for _, name in ipairs(names) do
       if type(name) ~= "string" then bad("surfaces must be a list of names") end
       if not game.get_surface(name) then not_found("no such surface: " .. name) end
+      -- a repeated name would multiply the chunk list: count every surface once
+      if not seen[name] then
+        seen[name] = true
+        unique[#unique + 1] = name
+      end
     end
+    names = unique
   end
   local chunks = {}
   for index, name in ipairs(names) do
     local surface = game.get_surface(name)
     if surface then add_all_chunks(surface, index, chunks) end
+    if #chunks > limits.MAX_JOB_CHUNKS * 3 then
+      bad("too many chunks for one job (limit " .. limits.MAX_JOB_CHUNKS .. "): ask for fewer surfaces")
+    end
   end
   return { surfaces = names, chunks = chunks, acc = { machines = 0, working = 0, groups = {} } }
 end

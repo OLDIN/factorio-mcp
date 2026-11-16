@@ -7,13 +7,16 @@ from ..jobs import JobRunner
 from .registry import ToolSpec
 
 
+MAX_SURFACES = 32
+
+
 def specs(bridge: ModBridge) -> list[ToolSpec]:
     runner = JobRunner(bridge)
 
     async def base_machines_overview(surfaces: list[str] | None = None) -> dict[str, Any]:
         params: dict[str, Any] = {}
         if surfaces is not None:
-            params["surfaces"] = surfaces
+            params["surfaces"] = list(dict.fromkeys(surfaces))[:MAX_SURFACES]  # each surface once
         result = await runner.run("machines_overview", params)
         normalize_lists(result, ["groups"])
         normalize_lists(result, ["groups.*.examples"])

@@ -74,3 +74,13 @@ async def test_big_radius_for_offline_player_is_refused(stack):
         {"name": "aliceNick", "online": False, "position": None, "surface": None}]})
     res = await _call(stack, "inspect_area", {"radius": 200})
     assert res["isError"] is True and "offline" in res["content"][0]["text"]
+
+
+async def test_duplicate_surfaces_are_sent_once(stack):
+    await _setup(stack)
+    start = build_command("job_start", {"kind": "machines_overview", "params": {"surfaces": ["nauvis"]}})
+    stack.fake.responses[start] = env({"job_id": 1, "mode": "idle", "total_chunks": 1})
+    stack.fake.responses[build_command("job_result", {"job_id": 1, "offset": 0})] = env(
+        {"state": "done", "summary": {}, "groups": [], "total": 0})
+    await _call(stack, "base_machines_overview", {"surfaces": ["nauvis"] * 50})
+    assert start in stack.fake.received

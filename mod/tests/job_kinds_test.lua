@@ -75,4 +75,17 @@ for _, bad in ipairs({
   assert(not ok and type(err) == "table" and err.code, "expected a coded error for " .. bad[1])
 end
 
+-- a repeated surface name must not multiply the chunk list
+local once = kinds.plan("machines_overview", { surfaces = { "nauvis" } })
+local many = kinds.plan("machines_overview", { surfaces = { "nauvis", "nauvis", "nauvis", "nauvis" } })
+assert(#many.chunks == #once.chunks and #many.surfaces == 1)
+
+-- a job over more chunks than the limit is refused
+local limits = require("scripts.limits")
+local saved = limits.MAX_JOB_CHUNKS
+limits.MAX_JOB_CHUNKS = 2
+local ok, err = pcall(kinds.plan, "machines_overview", {})
+limits.MAX_JOB_CHUNKS = saved
+assert(not ok and err.code == "bad_params", "chunk limit must be enforced")
+
 print("job_kinds_test ok")
