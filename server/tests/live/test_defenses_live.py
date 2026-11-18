@@ -80,3 +80,19 @@ async def test_defenses_bounds(rcon):
         with pytest.raises(ModError) as info:
             await bridge.call("defenses", {"surface": "nauvis", "x": 0, "y": 0, **params})
         assert info.value.code == "bad_params"
+
+
+async def test_defenses_overview_lists_dry_turrets(armed, caller_nick):
+    import asyncio
+
+    await sc(armed, SETUP)
+    bridge = ModBridge(armed)
+    start = await bridge.call("job_start", {"kind": "defenses_overview", "params": {"caller": caller_nick}, "mode": "idle"})
+    for _ in range(300):
+        page = await bridge.call("job_result", {"job_id": start["job_id"]})
+        if page["state"] == "done":
+            break
+        await asyncio.sleep(0.1)
+    assert page["state"] == "done"
+    assert page["summary"]["issues"]["no_ammo"] >= 1
+    assert any(p["issue"] == "no_ammo" and p["gps"].endswith(",nauvis]") for p in page["problems"])

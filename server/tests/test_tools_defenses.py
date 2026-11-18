@@ -119,3 +119,45 @@ async def test_defenses_normalizes_empty_maps(stack):
     assert data["summary"]["issues"] == {}
     assert data["groups"] == []
     assert data["problems"] == []
+
+
+def _env(result):
+    return json.dumps({"v": 1, "ok": True, "result": result})
+
+
+OVERVIEW_PROBLEMS = [
+    {"name": "gun-turret", "type": "ammo-turret", "x": 1, "y": 1, "issue": "no_ammo", "health": 400,
+     "max_health": 400, "ammo": 0, "surface": "nauvis", "gps": "[gps=1,1,nauvis]"},
+    {"name": "stone-wall", "type": "wall", "x": 5, "y": 5, "issue": "damaged", "health": 10,
+     "max_health": 350, "surface": "vulcanus", "gps": "[gps=5,5,vulcanus]"},
+]
+
+
+async def test_base_defenses_overview_requires_threats_command(stack):
+    stack.fake.responses[build_command("hello")] = hello_reply(ALL + ("job_start", "job_result"))
+    await stack.bridge.refresh_hello()
+    assert "base_defenses_overview" not in await stack.tool_names()  # mod 0.3.0: defenses but no overview kind
+    stack.fake.responses[build_command("hello")] = hello_reply(ALL + ("job_start", "job_result", "threats"))
+    await stack.bridge.refresh_hello()
+    assert "base_defenses_overview" in await stack.tool_names()
+
+
+async def test_base_defenses_overview_collects_and_pages(stack):
+    stack.fake.responses[build_command("hello")] = hello_reply(ALL + ("job_start", "job_result", "threats"))
+    await stack.bridge.refresh_hello()
+    start = build_command("job_start", {"kind": "defenses_overview", "params": {"caller": "aliceNick"}})
+    stack.fake.responses[start] = _env({"job_id": 6, "mode": "idle", "work_items": 3})
+    stack.fake.responses[build_command("job_result", {"job_id": 6, "offset": 0})] = _env({
+        "state": "done",
+        "summary": {"total": 10, "turrets": 4, "walls": 6, "other": 0,
+                    "issues": {"no_ammo": 1, "no_power": 0, "no_fluid": 0, "damaged": 1}},
+        "by_surface": {"nauvis": {"total": 7, "problems": 1}, "vulcanus": {"total": 3, "problems": 1}},
+        "groups": [], "problems_total": 2, "problems": OVERVIEW_PROBLEMS, "total": 2,
+    })
+    r = await stack.rpc("tools/call", {"name": "base_defenses_overview", "arguments": {"limit": 1}})
+    data = json.loads(r.json()["result"]["content"][0]["text"])
+    assert start in stack.fake.received
+    assert data["summary"]["issues"]["no_ammo"] == 1
+    assert data["by_surface"]["vulcanus"]["problems"] == 1
+    assert [p["issue"] for p in data["problems"]] == ["no_ammo"]
+    assert data["problems_total"] == 2 and data["next"] == 1

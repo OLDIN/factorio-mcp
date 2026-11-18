@@ -27,7 +27,12 @@ local function make_surface(entities, chunks)
     for _, t in ipairs(filter.type) do types[t] = true end
     local out = {}
     for _, e in ipairs(entities) do
-      local force_ok = filter.force == nil or (e.force and e.force.name or "player") == filter.force
+      local fname = e.force and e.force.name or "player"
+      local force_ok = filter.force == nil
+      if type(filter.force) == "string" then force_ok = fname == filter.force end
+      if type(filter.force) == "table" then
+        for _, f in ipairs(filter.force) do if f == fname then force_ok = true end end
+      end
       if inside(e, filter.area) and types[e.type] and force_ok then out[#out + 1] = e end
     end
     return out
@@ -144,5 +149,49 @@ assert(power_page.summary.networks == 1, "the enemy pole is filtered out")
 assert(power_page.networks[1].starved.no_power == 1)
 local bad_ok, bad_err = pcall(kinds.plan, "power_overview", { caller = "nobody" })
 assert(not bad_ok and bad_err.code == "not_found", "unknown caller")
+
+-- threats job: enemy spawners within the radius, nearest first; player-force entities never counted
+local enemy = { name = "enemy" }
+local function spawner(x, y, force)
+  return { name = "biter-spawner", type = "unit-spawner", position = { x = x, y = y }, valid = true, force = force }
+end
+local threat_surface = make_surface({ spawner(100, 0, enemy), spawner(400, 0, enemy), spawner(900, 0, enemy), spawner(480, 300, enemy),
+  spawner(50, 0, { name = "player" }) }, { { x = 0, y = 0 } })
+threat_surface.get_pollution = function() return 3 end
+threat_surface.get_segmented_units = function() return {} end
+local alice_force = { name = "player", is_enemy = function(other) return other.name == "enemy" end }
+local function run_threats(params)
+  _G.game = {
+    surfaces = { nauvis = threat_surface }, forces = { player = alice_force, enemy = enemy },
+    get_surface = function(name) return name == "nauvis" and threat_surface or nil end,
+    get_player = function(name) if name == "alice" then return { name = "alice", force = alice_force } end end,
+  }
+  local plan = kinds.plan("threats", params)
+  plan.mode = "idle"
+  local state = engine.new()
+  local id = engine.start(state, "threats", plan.params, 1, plan)
+  assert(engine.step(state, id, 1e9, kinds.stepper("threats")))
+  return engine.take_page(state, id, 0, 1000, 1e6)
+end
+local threats_page = run_threats({ caller = "alice", surface = "nauvis", x = 0, y = 0, radius = 500, limit = 5 })
+assert(threats_page.total == 2, "two enemy spawners within 500 tiles, got " .. tostring(threats_page.total))
+assert(threats_page.nearest[1].distance == 100 and threats_page.nearest[1].direction == "E")
+assert(threats_page.nearest[1].pollution == 3)
+assert(threats_page.radius == 500 and threats_page.center.surface == "nauvis")
+local tb_ok, tb_err = pcall(kinds.plan, "threats", { caller = "alice", surface = "nauvis", x = 0, y = 0, radius = 2000 })
+assert(not tb_ok and tb_err.code == "bad_params", "radius above the job bound")
+
+-- defenses_overview: dry turrets of the caller's force over the whole surface, with gps
+_G.defines.inventory.turret_ammo = 1
+local function dry(x, force)
+  return { name = "gun-turret", type = "ammo-turret", position = { x = x, y = 1 }, valid = true, force = force,
+    health = 400, max_health = 400,
+    get_inventory = function() return { valid = true, get_contents = function() return {} end } end }
+end
+local def_surface = make_surface({ dry(2), dry(40), dry(70, { name = "enemy" }) }, { { x = 0, y = 0 }, { x = 1, y = 0 }, { x = 2, y = 0 } })
+local def_page = run("defenses_overview", { caller = "alice" }, def_surface)
+assert(def_page.summary.issues.no_ammo == 2, "two own dry turrets, the enemy one filtered by force")
+assert(def_page.by_surface.nauvis.problems == 2)
+assert(def_page.problems[1].gps:match("nauvis%]$"))
 
 print("job_kinds_test ok")

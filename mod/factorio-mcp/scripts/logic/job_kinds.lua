@@ -8,6 +8,8 @@ local area_group = require("scripts.logic.area_group")
 local area_scan = require("scripts.logic.area_scan")
 local caller = require("scripts.logic.caller")
 local power_overview = require("scripts.logic.power_overview")
+local threats_logic = require("scripts.logic.threats_logic")
+local defenses_scan = require("scripts.logic.defenses_scan")
 local engine = require("scripts.logic.job_engine")
 local limits = require("scripts.limits")
 
@@ -121,6 +123,20 @@ local function number(params, key)
   return v
 end
 
+-- first-level blocks of surface 1 that touch the circle (x, y, radius)
+local function circle_blocks(x, y, radius)
+  local work = {}
+  add_blocks(work, 1, math.floor((x - radius) / CHUNK), math.floor((y - radius) / CHUNK),
+    math.floor((x + radius) / CHUNK), math.floor((y + radius) / CHUNK),
+    function(bx, by)
+      -- skip blocks whose square cannot touch the circle
+      local nx = math.max(bx, math.min(x, bx + BLOCK))
+      local ny = math.max(by, math.min(y, by + BLOCK))
+      return (nx - x) ^ 2 + (ny - y) ^ 2 <= radius ^ 2
+    end)
+  return work
+end
+
 local function plan_area(params)
   if type(params.surface) ~= "string" then bad("surface is required") end
   local surface = game.get_surface(params.surface)
@@ -133,22 +149,47 @@ local function plan_area(params)
   if type(max_listed) ~= "number" or max_listed < 1 or max_listed ~= math.floor(max_listed) then
     bad("max_listed must be a positive integer")
   end
-  local work = {}
-  add_blocks(work, 1, math.floor((x - radius) / CHUNK), math.floor((y - radius) / CHUNK),
-    math.floor((x + radius) / CHUNK), math.floor((y + radius) / CHUNK),
-    function(bx, by)
-      -- skip blocks whose square cannot touch the circle
-      local nx = math.max(bx, math.min(x, bx + BLOCK))
-      local ny = math.max(by, math.min(y, by + BLOCK))
-      return (nx - x) ^ 2 + (ny - y) ^ 2 <= radius ^ 2
-    end)
+  local work = circle_blocks(x, y, radius)
   return {
     surfaces = { params.surface }, work = work, acc = area_group.new(max_listed),
     params = { surface = params.surface, x = x, y = y, radius = radius },
   }
 end
 
-local planners = { machines_overview = plan_overview, area = plan_area, power_overview = plan_power_overview }
+local function plan_threats(params)
+  local force = caller.force(params)
+  if type(params.surface) ~= "string" then bad("surface is required") end
+  if not game.get_surface(params.surface) then not_found("no such surface") end
+  local x, y, radius = number(params, "x"), number(params, "y"), number(params, "radius")
+  if radius <= 0 or radius > limits.MAX_JOB_AREA_RADIUS then
+    bad("radius must be between 0 and " .. limits.MAX_JOB_AREA_RADIUS)
+  end
+  local limit = params.limit or 10
+  if type(limit) ~= "number" or limit < 1 or limit > 30 or limit ~= math.floor(limit) then
+    bad("limit must be an integer between 1 and 30")
+  end
+  local enemies = threats_logic.enemy_force_names(force, game.forces)
+  return {
+    surfaces = { params.surface }, work = #enemies > 0 and circle_blocks(x, y, radius) or {},
+    acc = threats_logic.new_acc({ x = x, y = y }, params.surface, limit),
+    params = { surface = params.surface, x = x, y = y, radius = radius, enemies = enemies },
+  }
+end
+
+local function plan_defenses_overview(params)
+  local force = caller.force(params)
+  local names, work = plan_surfaces(params)
+  local keep = params.max_listed or 50
+  if type(keep) ~= "number" or keep < 1 or keep > 200 or keep ~= math.floor(keep) then
+    bad("max_listed must be an integer between 1 and 200")
+  end
+  return { surfaces = names, work = work, acc = defenses_scan.new_acc(keep), params = { force = force.name } }
+end
+
+local planners = {
+  machines_overview = plan_overview, area = plan_area, power_overview = plan_power_overview, threats = plan_threats,
+  defenses_overview = plan_defenses_overview,
+}
 
 function M.known(kind)
   return planners[kind] ~= nil
@@ -273,7 +314,49 @@ function power.finish(job)
   return { fields = { summary = out.summary }, list_name = "networks", list = out.list }
 end
 
-local steppers = { machines_overview = overview, area = area, power_overview = power }
+local threats = {}
+
+function threats.work(job, si, x0, y0, size)
+  local p = job.params
+  local surface = game.get_surface(p.surface)
+  return scan_area(job, si, x0, y0, size, function(j, entity)
+    local pos = entity.position
+    if (pos.x - p.x) ^ 2 + (pos.y - p.y) ^ 2 <= p.radius ^ 2 then
+      threats_logic.add(j.acc, threats_logic.record(entity, surface))
+    end
+  end, { type = threats_logic.ENEMY_TYPES, force = p.enemies })
+end
+
+function threats.finish(job)
+  local p = job.params
+  local surface = game.get_surface(p.surface)
+  if surface and #p.enemies > 0 then threats_logic.add_surface_units(job.acc, surface, p.enemies, p.radius) end
+  local result = threats_logic.finish(job.acc)
+  result.center = { surface = p.surface, x = p.x, y = p.y }
+  result.radius = p.radius
+  return { fields = result }
+end
+
+local defenses = {}
+
+function defenses.work(job, si, x0, y0, size)
+  local surface_name = job.surfaces[si]
+  return scan_area(job, si, x0, y0, size, function(j, entity)
+    defenses_scan.add(j.acc, defenses_scan.record(entity), surface_name)
+  end, { type = defenses_scan.DEFENSE_TYPES, force = job.params.force })
+end
+
+function defenses.finish(job)
+  local out = defenses_scan.finish(job.acc)
+  return {
+    fields = { summary = out.summary, by_surface = out.by_surface, groups = out.groups, problems_total = out.problems_total },
+    list_name = "problems", list = out.problems,
+  }
+end
+
+local steppers = {
+  machines_overview = overview, area = area, power_overview = power, threats = threats, defenses_overview = defenses,
+}
 
 function M.stepper(kind)
   return steppers[kind]

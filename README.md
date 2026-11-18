@@ -24,6 +24,9 @@ It has two parts:
 | `inspect_power` | Electric networks around a point: power produced and consumed now, biggest producers and consumers, accumulator charge, machines short of power |
 | `base_power_overview` | Every electric network of the base, the ones with machines short of power first |
 | `research_status` | What is being researched and how far, the queue, what can be researched now, what one technology still needs |
+| `inspect_threats` | Enemy nests, worms and demolishers around a point: counts, the nearest with distance, direction and the pollution reaching them |
+| `inspect_pollution` | Smoke or spores around a point, the most polluted chunks, the biggest polluters, nests the pollution reaches |
+| `base_defenses_overview` | Defenses on the whole base per surface, the worst problems first (dry, unpowered, damaged) |
 | `inspect_defenses` | Turrets, walls, gates, mines and radars around a `[gps]` point, a player, or yourself: ammo and flamethrower fluid, power, damage, and the worst problems first (needs mod 0.3.0+) |
 
 Large queries (big areas, the whole base) are split over many game ticks, so players do not feel them.
