@@ -75,7 +75,7 @@ async def _call(stack, arguments, token=None):
 
 async def test_defenses_no_arguments_uses_nick_from_token(stack):
     await _setup(stack)
-    stack.fake.responses[build_command("defenses", {"radius": 64.0, "max_listed": 20, "player": "aliceNick"})] = (
+    stack.fake.responses[build_command("defenses", {"radius": 32.0, "max_listed": 20, "player": "aliceNick"})] = (
         json.dumps(DEFENSES)
     )
     res = await _call(stack, {})
@@ -112,7 +112,7 @@ async def test_defenses_normalizes_empty_maps(stack):
             "problems_total": 0,
         },
     }
-    cmd = build_command("defenses", {"radius": 64.0, "max_listed": 20, "player": "bobNick"})
+    cmd = build_command("defenses", {"radius": 32.0, "max_listed": 20, "player": "bobNick"})
     stack.fake.responses[cmd] = json.dumps(empty_result)
     res = await _call(stack, {}, token=TOKEN_BOB)
     data = json.loads(res["content"][0]["text"])

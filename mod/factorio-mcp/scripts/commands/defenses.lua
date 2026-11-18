@@ -1,10 +1,12 @@
 -- `defenses` subcommand: military and defensive structures around a player or a point.
 -- Reads turrets, ammo counts, fluid amounts, power state, and wall integrity.
--- Params: {player?} or {surface, x, y}; radius? (default 64), max_listed? (default 20).
+-- Params: {player?} or {surface, x, y}; radius? (default 32, at most 64), max_listed? (default 20, at most 50).
+-- The scan runs in one tick, so the radius is bounded like the synchronous `area` scan.
 local dispatcher = require("scripts.dispatcher")
 local defenses_scan = require("scripts.logic.defenses_scan")
 
-local MAX_DEFENSES_RADIUS = 256
+local MAX_DEFENSES_RADIUS = 64
+local MAX_LISTED = 50
 
 local function number_param(params, key, default)
   local v = params[key]
@@ -41,7 +43,7 @@ local function center_from(params)
 end
 
 dispatcher.register("defenses", function(params)
-  local radius = number_param(params, "radius", 64)
+  local radius = number_param(params, "radius", 32)
   if radius <= 0 then error({ code = "bad_params", message = "radius must be positive" }) end
   if radius > MAX_DEFENSES_RADIUS then
     error({ code = "bad_params", message = "radius above " .. MAX_DEFENSES_RADIUS .. " is not supported" })
@@ -49,6 +51,9 @@ dispatcher.register("defenses", function(params)
   local max_listed = number_param(params, "max_listed", 20)
   if max_listed < 1 or max_listed ~= math.floor(max_listed) then
     error({ code = "bad_params", message = "max_listed must be a positive integer" })
+  end
+  if max_listed > MAX_LISTED then
+    error({ code = "bad_params", message = "max_listed above " .. MAX_LISTED .. " is not supported" })
   end
   local surface, center = center_from(params)
   local result = defenses_scan.scan(surface, center, radius, max_listed)

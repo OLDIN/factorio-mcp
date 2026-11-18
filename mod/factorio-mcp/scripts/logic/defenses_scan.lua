@@ -34,6 +34,15 @@ local function is_wall_type(etype)
   return etype == "wall" or etype == "gate"
 end
 
+-- Worms are type "turret" on the enemy force; neutral entities are map decoration.
+-- Neither is part of anyone's defense, so the scan skips them.
+local function is_hostile_or_neutral(entity)
+  local force = read(entity, "force")
+  if not force then return false end
+  local fname = read(force, "name")
+  return fname == "enemy" or fname == "neutral"
+end
+
 function M.scan(surface, center, radius, max_listed)
   local entities = surface.find_entities_filtered({
     position = { x = center.x, y = center.y },
@@ -55,7 +64,7 @@ function M.scan(surface, center, radius, max_listed)
   local problem_candidates = {}
 
   for _, entity in ipairs(entities) do
-    if entity.valid then
+    if entity.valid and not is_hostile_or_neutral(entity) then
       total = total + 1
       local name = entity.name
       local etype = entity.type
@@ -169,7 +178,7 @@ function M.scan(surface, center, radius, max_listed)
 
       -- Check if problematic
       if unsupplied_issue or is_damaged then
-        local priority = 10
+        local priority
         local main_issue = unsupplied_issue or "damaged"
         if is_turret and unsupplied_issue then
           priority = 1
