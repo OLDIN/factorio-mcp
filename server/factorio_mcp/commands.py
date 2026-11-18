@@ -21,6 +21,7 @@ ALLOWED_SUBS: frozenset[str] = frozenset(
         "proto_planets",
         "area",
         "defenses",
+        "production",
         "job_start",
         "job_result",
         "job_cancel",

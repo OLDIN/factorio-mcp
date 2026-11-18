@@ -30,6 +30,28 @@ FORBIDDEN_LUA = [
     "/c ",
     "/sc",
     "remote.add_interface",
+    # schedules, research, inventories and statistics (release 0.4.0 reads all of these)
+    "set_records",
+    "add_record",
+    "remove_record",
+    "go_to_station",
+    "set_stopped",
+    "add_interrupt",
+    "set_interrupts",
+    "clear_records",
+    "add_research",
+    "cancel_current_research",
+    ".remove_item(",
+    ".clear(",
+    "on_flow(",
+    "set_flow_count",
+]
+# Assignments to these fields change the game; reading or comparing them (`==`) is fine.
+ASSIGNED_FIELDS = ["manual_mode", "research_queue", "energy", "schedule", "paused", "current_research", "research_progress"]
+FORBIDDEN_LUA_PATTERNS = [
+    re.compile(r"(?<!table)\.insert\("),  # inventory/entity insert; `table.insert` is plain Lua
+    re.compile(r"\.set_\w+\("),  # setters on game objects
+    *(re.compile(r"\." + field + r"\s*=(?!=)") for field in ASSIGNED_FIELDS),
 ]
 # The one allowed chat line: the refusal shown to a player who types the command.
 ALLOWED_PLAYER_PRINT = ("dispatcher.lua", 'player.print("factorio-mcp: server only")')
@@ -47,6 +69,9 @@ def lua_violations(filename: str, text: str) -> list[str]:
         for token in FORBIDDEN_LUA:
             if token in line:
                 found.append(f"{filename}:{number}: forbidden '{token}'")
+        for pattern in FORBIDDEN_LUA_PATTERNS:
+            if pattern.search(line):
+                found.append(f"{filename}:{number}: forbidden pattern '{pattern.pattern}'")
         for call in PRINT_CALL.finditer(line):
             allowed = (
                 call.group(0).startswith("rcon.print")
@@ -98,6 +123,29 @@ def test_service_executes_rcon_only_in_bridge():
         "local cmd = '/sc rcon.print(1)'",
         "remote.add_interface('x', {})",
         "other_player.print('hello')",
+        "schedule.set_records(records)",
+        "schedule.add_record({station = 'x'})",
+        "schedule.remove_record({schedule_index = 1})",
+        "schedule.go_to_station(2)",
+        "schedule.set_stopped(true)",
+        "schedule.add_interrupt({})",
+        "schedule.set_interrupts({})",
+        "schedule.clear_records()",
+        "train.manual_mode = true",
+        "force.research_queue = {}",
+        "force.add_research('automation')",
+        "force.cancel_current_research()",
+        "inv.remove_item({name = 'coal'})",
+        "inv.clear()",
+        "accumulator.energy = 0",
+        "stats.on_flow('iron-plate', 10)",
+        "stats.set_flow_count{name = 'x'}",
+        "train.schedule = nil",
+        "platform.paused = true",
+        "force.current_research = 'automation'",
+        "force.research_progress = 1",
+        "inv.insert({name = 'coal'})",
+        "entity.set_recipe('iron-gear-wheel')",
     ],
 )
 def test_lua_scanner_flags_forbidden_code(line):
@@ -111,6 +159,15 @@ def test_lua_scanner_allows_only_the_known_lines():
     assert lua_violations("other.lua", 'player.print("factorio-mcp: server only")')
     # forbidden words in comments do not count
     assert lua_violations("x.lua", "-- never call helpers.write_file here") == []
+    # plain Lua table helpers are not world changes
+    assert lua_violations("x.lua", "table.insert(list, item)") == []
+    # reading is fine: getters and comparisons
+    assert lua_violations("x.lua", "local cur = force.current_research") == []
+    assert lua_violations("x.lua", "if train.manual_mode == true then end") == []
+    assert lua_violations("x.lua", "if entity.energy ~= 0 then end") == []
+    # a table key or a local of the same name is not a field assignment
+    assert lua_violations("x.lua", "return { paused = not not game.tick_paused }") == []
+    assert lua_violations("x.lua", "local energy = read(entity, 'energy')") == []
 
 
 def test_exec_scanner_flags_rcon_exec_outside_bridge():

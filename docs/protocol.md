@@ -29,6 +29,8 @@ The reply is a single line of JSON printed with `rcon.print`:
 
 ## Commands
 
+Commands added in 0.4.0 take `caller`: the nick from the service's token. They read only that player's force, and answer `not_found` "no such player" for an unknown nick.
+
 | Command | Parameters | `result` |
 |---|---|---|
 | `hello` | none | `{mod_version, protocol, commands, fingerprint, max_response_bytes}` |
@@ -37,6 +39,7 @@ The reply is a single line of JSON printed with `rcon.print`:
 | `proto_recipes`, `proto_machines`, `proto_items`, `proto_fluids`, `proto_modules`, `proto_qualities`, `proto_technologies`, `proto_planets` | `{offset?, limit?}` | `{kind, total, offset, items, next}`; a page stops at the response budget, `next` is the offset of the following page or absent |
 | `area` | `{player}` or `{surface, x, y}`; `radius?` (default 32, at most 64), `max_listed?` (default 20) | machines and drills around a point: `{center, radius, totals, groups, stopped, drills, truncated}` |
 | `defenses` | `{player}` or `{surface, x, y}`; `radius?` (default 32, at most 64), `max_listed?` (default 20, at most 50) | defensive structures of the players' forces around a point (enemy and neutral entities are skipped): `{center, radius, summary: {total, turrets, walls, other, issues: {no_ammo, no_power, no_fluid, damaged}}, groups: [{name, type, count, ready, damaged, ammo?, fluids?}], problems: [{name, type, x, y, issue, health, max_health, ammo?, fluid?}], problems_total}`; `problems` lists unsupplied turrets first, then damaged turrets, walls and the rest |
+| `production` | `{caller, window?, surface?, name?, limit?}`; `window` is `5s`, `1m` (default), `10m`, `1h` or `10h`; `limit` 1..50 (default 15) | per minute, averaged over the window, for the caller's force: `{window, surfaces, items: {top_produced, top_consumed, deficits}, fluids: {...}}`, each entry `{name, produced, consumed, net}`; with `name`: `{window, name, kind, total, by_surface: [{surface, produced, consumed, net}], by_quality?}` (items are summed over qualities) |
 | `job_start` | `{kind, params?, mode?}` | `{job_id, mode, work_items}` |
 | `job_result` | `{job_id, offset?, limit?}` | `{state: "running", mode, progress}`, `{state: "cancelled"}`, or `{state: "done", ...result fields, next?}` |
 | `job_cancel` | `{job_id}` | `{cancelled}` |

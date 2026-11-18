@@ -6,9 +6,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from .. import jobs
 from ..bridge import ModBridge, ModError, normalize_lists, normalize_maps
-from ..gps import GpsParseError, parse_gps
 from ..identity import current_identity
 from ..jobs import JobRunner, user_message
+from .common import point_args
 from .registry import ToolSpec
 
 
@@ -47,16 +47,7 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         if job_id is not None:  # continue a scan that was still running
             return await finish(job_id, None, max_groups)
         args: dict[str, Any] = {"radius": radius}
-        if gps is not None:
-            try:
-                point = parse_gps(gps)
-            except GpsParseError as err:
-                raise ToolError(f"Could not read the gps tag: {err}. Expected [gps=x,y] or [gps=x,y,surface].") from None
-            args.update(surface=point.surface, x=point.x, y=point.y)
-        elif player is not None:
-            args["player"] = player  # any player's position is public
-        else:
-            args["player"] = current_identity().nick  # from the token, never from arguments
+        args.update(point_args(gps, player))
         if radius > SYNC_MAX_RADIUS:
             if "player" in args:  # a job needs a point: look the player up (positions are public)
                 args.update(await locate(args.pop("player")))

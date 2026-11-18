@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.mcpserver.exceptions import ToolError
-
 from ..bridge import ModBridge, normalize_lists, normalize_maps
-from ..gps import GpsParseError, parse_gps
-from ..identity import current_identity
+from .common import point_args
 from .registry import ToolSpec
 
 
@@ -18,16 +15,7 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         max_listed: int = 20,
     ) -> dict[str, Any]:
         args: dict[str, Any] = {"radius": radius, "max_listed": max_listed}
-        if gps is not None:
-            try:
-                point = parse_gps(gps)
-            except GpsParseError as err:
-                raise ToolError(f"Could not read the gps tag: {err}. Expected [gps=x,y] or [gps=x,y,surface].") from None
-            args.update(surface=point.surface, x=point.x, y=point.y)
-        elif player is not None:
-            args["player"] = player
-        else:
-            args["player"] = current_identity().nick
+        args.update(point_args(gps, player))
 
         result = await bridge.call("defenses", args)
         return normalize(result)
