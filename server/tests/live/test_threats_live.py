@@ -62,3 +62,27 @@ async def test_threats_unknown_caller(armed):
     with pytest.raises(ModError) as info:
         await ModBridge(armed).call("threats", {"caller": "nobody-here-123", "surface": "nauvis", "x": 0, "y": 0})
     assert info.value.code == "not_found"
+
+
+async def test_pollution_on_nauvis(armed, caller_nick):
+    where = json.loads(await sc(armed, SETUP))
+    result = await ModBridge(armed).call(
+        "pollution", {"caller": caller_nick, "surface": "nauvis", "x": where["x"], "y": where["y"], "grid": 3}
+    )
+    assert result["pollutant"] == "pollution"
+    assert result["grid"] == 3 and isinstance(result["total"], (int, float))
+
+
+async def test_pollution_spores_on_gleba(armed, caller_nick):
+    has_gleba = (await sc(armed, "rcon.print(game.planets.gleba and 'yes' or 'no')")).strip()
+    if has_gleba != "yes":
+        pytest.skip("Space Age is not enabled (run with SPACE_AGE=true)")
+    await sc(armed, "if not game.surfaces.gleba then game.planets.gleba.create_surface() end")
+    result = await ModBridge(armed).call("pollution", {"caller": caller_nick, "surface": "gleba", "x": 0, "y": 0, "grid": 1})
+    assert result["pollutant"] == "spores"
+
+
+async def test_pollution_unknown_caller(armed):
+    with pytest.raises(ModError) as info:
+        await ModBridge(armed).call("pollution", {"caller": "nobody-here-123", "surface": "nauvis", "x": 0, "y": 0})
+    assert info.value.code == "not_found"

@@ -88,3 +88,35 @@ async def test_threats_offline_caller_needs_gps(stack):
     )
     res = await _call(stack, {})
     assert res["isError"] is True and "[gps=x,y,surface]" in res["content"][0]["text"]
+
+
+POLLUTION = {
+    "surface": "gleba", "pollutant": "spores", "total": 1234.5,
+    "center": {"surface": "gleba", "x": 0, "y": 0}, "grid": 9,
+    "top_cells": [{"gps": "[gps=16,16,gleba]", "amount": 50.5}],
+    "sources": [{"name": "agricultural-tower", "per_minute": 120}],
+    "fed_spawners": [],
+}
+
+
+async def _setup_pollution(stack):
+    stack.fake.responses[build_command("hello")] = hello_reply(ALL + ("pollution",))
+    await stack.bridge.refresh_hello()
+
+
+async def test_pollution_defaults(stack):
+    await _setup_pollution(stack)
+    cmd = build_command("pollution", {"caller": "aliceNick", "player": "aliceNick", "grid": 9, "limit": 10})
+    stack.fake.responses[cmd] = _env(POLLUTION)
+    r = await stack.rpc("tools/call", {"name": "inspect_pollution", "arguments": {}})
+    data = json.loads(r.json()["result"]["content"][0]["text"])
+    assert data["pollutant"] == "spores" and data["fed_spawners"] == []
+
+
+async def test_pollution_gps_and_empty_lists(stack):
+    await _setup_pollution(stack)
+    cmd = build_command("pollution", {"caller": "aliceNick", "surface": "nauvis", "x": 1.0, "y": 2.0, "grid": 5, "limit": 10})
+    stack.fake.responses[cmd] = _env({**POLLUTION, "top_cells": {}, "sources": {}, "fed_spawners": {}})
+    r = await stack.rpc("tools/call", {"name": "inspect_pollution", "arguments": {"gps": "[gps=1,2,nauvis]", "grid": 5}})
+    data = json.loads(r.json()["result"]["content"][0]["text"])
+    assert data["top_cells"] == [] and data["sources"] == [] and data["fed_spawners"] == []

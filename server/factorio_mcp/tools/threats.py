@@ -39,6 +39,13 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         args = {**caller_args(), **point, "radius": radius, "limit": limit}
         return normalize_threats(await call_mod(bridge, "threats", args))
 
+    async def inspect_pollution(
+        gps: str | None = None, player: str | None = None, grid: int = 9, limit: int = 10
+    ) -> dict[str, Any]:
+        args = {**caller_args(), **point_args(gps, player), "grid": grid, "limit": limit}
+        result = await call_mod(bridge, "pollution", args)
+        return normalize_lists(result, ["top_cells", "sources", "fed_spawners"])
+
     return [
         ToolSpec(
             "inspect_threats",
@@ -47,5 +54,13 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
             "over several ticks, call again with job_id if status is \"running\"): counts by name and the "
             "nearest ones with distance, direction, [gps] and the pollution reaching each nest.",
             inspect_threats,
-        )
+        ),
+        ToolSpec(
+            "inspect_pollution",
+            "pollution",
+            "Pollution around a point: the surface's pollutant (smoke on most planets, spores on Gleba) and total, "
+            "the most polluted chunks of a grid (grid odd, default 9 chunks), the biggest polluters on the "
+            "surface per minute, and enemy nests the pollution reaches (they attack when fed).",
+            inspect_pollution,
+        ),
     ]
