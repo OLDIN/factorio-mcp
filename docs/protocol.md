@@ -40,6 +40,7 @@ Commands added in 0.4.0 take `caller`: the nick from the service's token. They r
 | `area` | `{player}` or `{surface, x, y}`; `radius?` (default 32, at most 64), `max_listed?` (default 20) | machines and drills around a point: `{center, radius, totals, groups, stopped, drills, truncated}` |
 | `defenses` | `{player}` or `{surface, x, y}`; `radius?` (default 32, at most 64), `max_listed?` (default 20, at most 50) | defensive structures of the players' forces around a point (enemy and neutral entities are skipped): `{center, radius, summary: {total, turrets, walls, other, issues: {no_ammo, no_power, no_fluid, damaged}}, groups: [{name, type, count, ready, damaged, ammo?, fluids?}], problems: [{name, type, x, y, issue, health, max_health, ammo?, fluid?}], problems_total}`; `problems` lists unsupplied turrets first, then damaged turrets, walls and the rest |
 | `production` | `{caller, window?, surface?, name?, limit?}`; `window` is `5s`, `1m` (default), `10m`, `1h` or `10h`; `limit` 1..50 (default 15) | per minute, averaged over the window, for the caller's force: `{window, surfaces, items: {top_produced, top_consumed, deficits}, fluids: {...}}`, each entry `{name, produced, consumed, net}`; with `name`: `{window, name, kind, total, by_surface: [{surface, produced, consumed, net}], by_quality?}` (items are summed over qualities) |
+| `power` | `{caller, player}` or `{caller, surface, x, y}`; `radius?` (default 32, at most 64), `limit?` (1..30, default 10) | electric networks of the caller's force with a pole in the radius, flows of the last 5 s in kW (`output` statistics = production, J/tick × 0.06): `{center, radius, window, networks: [{id, poles, gps, produced_kw, consumed_kw, top_producers, top_consumers, accumulators: {count, charge?}, starved: {low_power, no_power}}] (10 at most, most starved first), networks_total, starved_examples: [{name, gps, status, network}]}` |
 | `job_start` | `{kind, params?, mode?}` | `{job_id, mode, work_items}` |
 | `job_result` | `{job_id, offset?, limit?}` | `{state: "running", mode, progress}`, `{state: "cancelled"}`, or `{state: "done", ...result fields, next?}` |
 | `job_cancel` | `{job_id}` | `{cancelled}` |
@@ -60,6 +61,7 @@ vehicles (also modded ones) and containers are never queried, so their contents 
 
 Large queries run as jobs spread over game ticks so players do not feel them.
 
+- `job_start` kind `power_overview` (`params: {caller, surfaces?}`, mod 0.4.0+): every electric network of the caller's force; result `{summary: {networks, starved_networks, tiny}, networks: [{id, surface, poles, gps, produced_kw, consumed_kw, top_producers, top_consumers, starved, accumulators}]}`, most starved first; networks under 3 poles with nothing consuming are only counted in `tiny`.
 - `job_start` kinds: `machines_overview` (`params: {surfaces?: [name]}`, the whole map) and `area`
   (`params: {surface, x, y, radius, max_listed?}`, radius up to 1000).
 - **Method.** The map is cut into 512-tile blocks. A block's allowlisted entities are counted (cheap);

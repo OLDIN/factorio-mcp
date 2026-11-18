@@ -6,6 +6,8 @@
 -- map costs almost nothing, so a whole base takes seconds instead of minutes.
 local area_group = require("scripts.logic.area_group")
 local area_scan = require("scripts.logic.area_scan")
+local caller = require("scripts.logic.caller")
+local power_overview = require("scripts.logic.power_overview")
 local engine = require("scripts.logic.job_engine")
 local limits = require("scripts.limits")
 
@@ -58,7 +60,8 @@ local function chunk_bounds(surface)
   return minx, miny, maxx, maxy
 end
 
-local function plan_overview(params)
+-- Surfaces to scan (all, or the listed ones each once) and their first-level blocks.
+local function plan_surfaces(params)
   local names = params.surfaces
   if names == nil then
     names = sorted_surface_names()
@@ -90,7 +93,24 @@ local function plan_overview(params)
       end
     end
   end
+  return names, work
+end
+
+local function plan_overview(params)
+  local names, work = plan_surfaces(params)
   return { surfaces = names, work = work, acc = { machines = 0, working = 0, groups = {} } }
+end
+
+local POWER_TYPES = { "electric-pole", "accumulator" }
+for _, t in ipairs(area_scan.AREA_TYPES) do POWER_TYPES[#POWER_TYPES + 1] = t end
+
+local function plan_power_overview(params)
+  local force = caller.force(params)
+  local names, work = plan_surfaces(params)
+  return {
+    surfaces = names, work = work, acc = power_overview.new_acc(),
+    params = { force = force.name, limit = params.limit or 5 },
+  }
 end
 
 local function number(params, key)
@@ -128,7 +148,7 @@ local function plan_area(params)
   }
 end
 
-local planners = { machines_overview = plan_overview, area = plan_area }
+local planners = { machines_overview = plan_overview, area = plan_area, power_overview = plan_power_overview }
 
 function M.known(kind)
   return planners[kind] ~= nil
@@ -144,18 +164,19 @@ end
 -- Work one square area. `take(job, entity)` handles an entity found in it. Returns cost, split.
 -- An entity belongs to the area its position lies in (half-open square), so it is read once even
 -- when its collision box touches a neighbour.
-local function scan_area(job, si, x0, y0, size, take)
+-- `filter` holds the allowlisted `type` list and, optionally, a `force` name.
+local function scan_area(job, si, x0, y0, size, take, filter)
   local surface = game.get_surface(job.surfaces[si])
   if not surface or not surface.valid then return 1, false end
-  local area = { { x0, y0 }, { x0 + size, y0 + size } }
+  local query = { area = { { x0, y0 }, { x0 + size, y0 + size } }, type = filter.type, force = filter.force }
   local cost = COUNT_COST[size] or 1
-  local count = surface.count_entities_filtered({ area = area, type = area_scan.AREA_TYPES })
+  local count = surface.count_entities_filtered(query)
   if count == 0 then return cost, false end
   if count > SPLIT_COUNT and size > engine.TILE then
     engine.split(job, si, x0, y0, size)
     return cost, true
   end
-  local found = surface.find_entities_filtered({ area = area, type = area_scan.AREA_TYPES })
+  local found = surface.find_entities_filtered(query)
   local x1, y1 = x0 + size, y0 + size
   for _, entity in ipairs(found) do
     if entity.valid then
@@ -167,6 +188,7 @@ local function scan_area(job, si, x0, y0, size, take)
 end
 
 local EXAMPLES = 3
+local MACHINES = { type = area_scan.AREA_TYPES }
 
 local overview = {}
 
@@ -194,7 +216,7 @@ end
 
 function overview.work(job, si, x0, y0, size)
   job.current_surface = job.surfaces[si]
-  return scan_area(job, si, x0, y0, size, overview_take)
+  return scan_area(job, si, x0, y0, size, overview_take, MACHINES)
 end
 
 function overview.finish(job)
@@ -225,7 +247,7 @@ local function area_take(job, entity)
 end
 
 function area.work(job, si, x0, y0, size)
-  return scan_area(job, si, x0, y0, size, area_take)
+  return scan_area(job, si, x0, y0, size, area_take, MACHINES)
 end
 
 function area.finish(job)
@@ -238,7 +260,20 @@ function area.finish(job)
   return { fields = result }
 end
 
-local steppers = { machines_overview = overview, area = area }
+local power = {}
+
+function power.work(job, si, x0, y0, size)
+  local surface_name = job.surfaces[si]
+  return scan_area(job, si, x0, y0, size, function(j, entity) power_overview.take(j.acc, entity, surface_name) end,
+    { type = POWER_TYPES, force = job.params.force })
+end
+
+function power.finish(job)
+  local out = power_overview.finish(job.acc, job.params.limit)
+  return { fields = { summary = out.summary }, list_name = "networks", list = out.list }
+end
+
+local steppers = { machines_overview = overview, area = area, power_overview = power }
 
 function M.stepper(kind)
   return steppers[kind]
