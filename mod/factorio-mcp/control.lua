@@ -9,6 +9,7 @@ require("scripts.commands.server_info")
 require("scripts.commands.players")
 require("scripts.commands.proto")
 require("scripts.commands.area")
+require("scripts.commands.defenses")
 require("scripts.commands.job")
 
 commands.add_command(

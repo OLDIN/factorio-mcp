@@ -22,7 +22,7 @@ from .config import Settings
 from .identity import current_identity, reset_identity, set_identity
 from .instructions import INSTRUCTIONS
 from .tokens import TokenStore
-from .tools import area, overview, players, reference, server
+from .tools import area, defenses, overview, players, reference, server
 from .tools.registry import ToolSpec, visible
 
 _LOGGER = logging.getLogger(__name__)
@@ -104,7 +104,14 @@ def _wrap(spec: ToolSpec) -> Callable[..., Awaitable[Any]]:
 
 def create_app(settings: Settings, bridge: ModBridge, tokens: TokenStore) -> ASGIApp:
     mcp = MCPServer("factorio-mcp", instructions=INSTRUCTIONS)
-    all_specs = [*server.specs(bridge), *players.specs(bridge), *reference.specs(bridge), *area.specs(bridge), *overview.specs(bridge)]
+    all_specs = [
+        *server.specs(bridge),
+        *players.specs(bridge),
+        *reference.specs(bridge),
+        *area.specs(bridge),
+        *defenses.specs(bridge),
+        *overview.specs(bridge),
+    ]
     registered: set[str] = set()
 
     def sync_tools(hello: Hello | None) -> None:
