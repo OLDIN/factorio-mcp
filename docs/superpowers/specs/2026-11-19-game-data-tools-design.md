@@ -91,11 +91,12 @@ Force: every new command takes the caller's nick (`player`) and reads **that pla
 - `inspect_power`: electric networks of poles within a radius (default 32, max 64) of a point,
   player or yourself. For each network (`electric_network_id`, one pole's
   `electric_network_statistics`): production and consumption per window by entity name (top N),
-  satisfaction (consumption vs. production capacity), accumulators (count, charge from `energy`
-  / `electric_buffer_size`), and machines in the radius with status `low_power`/`no_power`.
+  accumulators (count, charge from `energy` / `electric_buffer_size`), and machines in the radius
+  with status `low_power`/`no_power` per network. (No capacity ratio: the statistics hold flows,
+  not generator capacity.)
 - `base_power_overview`: job over all surfaces counting `electric-pole` entities per block, keeping
   one pole per distinct network id, then reading each network's statistics once at the end.
-  Answer: networks sorted by trouble (unsatisfied first), with surface, size (poles) and a `[gps]`
+  Answer: networks sorted by trouble (most starved machines first), with surface, size (poles) and a `[gps]`
   of one pole; tiny networks (e.g. a lone pole) are summarized, not listed.
 
 ### 3. Research: `research_status` (sub `research`)
