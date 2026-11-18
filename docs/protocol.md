@@ -65,6 +65,7 @@ vehicles (also modded ones) and containers are never queried, so their contents 
 Large queries run as jobs spread over game ticks so players do not feel them.
 
 - `job_start` kind `threats` (`params: {caller, surface, x, y, radius (at most 1000), limit?}`, mod 0.4.0+): the `threats` answer for radii above 256.
+- `job_start` kind `defenses_overview` (`params: {caller, surfaces?, max_listed? (1..200, default 50)}`, mod 0.4.0+): the `defenses` scan of the caller's force over whole surfaces; result `{summary, by_surface: {surface: {total, problems}}, groups, problems_total, problems: [{..., surface, gps}]}`, worst first.
 - `job_start` kind `power_overview` (`params: {caller, surfaces?}`, mod 0.4.0+): every electric network of the caller's force; result `{summary: {networks, starved_networks, tiny}, networks: [{id, surface, poles, gps, produced_kw, consumed_kw, top_producers, top_consumers, starved, accumulators}]}`, most starved first; networks under 3 poles with nothing consuming are only counted in `tiny`.
 - `job_start` kinds: `machines_overview` (`params: {surfaces?: [name]}`, the whole map) and `area`
   (`params: {surface, x, y, radius, max_listed?}`, radius up to 1000).

@@ -65,3 +65,11 @@ async def run_job(runner: JobRunner, kind: str, params: dict[str, Any], job_id: 
         if message:
             raise ToolError(message) from None
         raise
+
+
+def page(items: list[Any], limit: int, offset: int) -> tuple[list[Any], int | None]:
+    """One page of a list (limit 1..100) and the offset of the next page, or None at the end."""
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    more = offset + limit < len(items)
+    return items[offset : offset + limit], (offset + limit if more else None)

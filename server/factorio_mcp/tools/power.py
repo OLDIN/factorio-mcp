@@ -4,18 +4,11 @@ from typing import Any
 
 from ..bridge import ModBridge, normalize_lists, normalize_maps
 from ..jobs import JobRunner
-from .common import call_mod, caller_args, point_args, run_job
+from .common import call_mod, caller_args, page, point_args, run_job
 from .registry import ToolSpec
 
 NETWORK_LISTS = ["networks.*.top_producers", "networks.*.top_consumers"]
 NETWORK_MAPS = ["networks.*.starved", "networks.*.accumulators"]
-
-
-def page(items: list[Any], limit: int, offset: int) -> tuple[list[Any], int | None]:
-    limit = max(1, min(limit, 100))
-    offset = max(0, offset)
-    more = offset + limit < len(items)
-    return items[offset : offset + limit], (offset + limit if more else None)
 
 
 def specs(bridge: ModBridge) -> list[ToolSpec]:

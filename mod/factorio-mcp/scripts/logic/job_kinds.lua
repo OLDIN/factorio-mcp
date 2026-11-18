@@ -9,6 +9,7 @@ local area_scan = require("scripts.logic.area_scan")
 local caller = require("scripts.logic.caller")
 local power_overview = require("scripts.logic.power_overview")
 local threats_logic = require("scripts.logic.threats_logic")
+local defenses_scan = require("scripts.logic.defenses_scan")
 local engine = require("scripts.logic.job_engine")
 local limits = require("scripts.limits")
 
@@ -175,8 +176,19 @@ local function plan_threats(params)
   }
 end
 
+local function plan_defenses_overview(params)
+  local force = caller.force(params)
+  local names, work = plan_surfaces(params)
+  local keep = params.max_listed or 50
+  if type(keep) ~= "number" or keep < 1 or keep > 200 or keep ~= math.floor(keep) then
+    bad("max_listed must be an integer between 1 and 200")
+  end
+  return { surfaces = names, work = work, acc = defenses_scan.new_acc(keep), params = { force = force.name } }
+end
+
 local planners = {
   machines_overview = plan_overview, area = plan_area, power_overview = plan_power_overview, threats = plan_threats,
+  defenses_overview = plan_defenses_overview,
 }
 
 function M.known(kind)
@@ -325,7 +337,26 @@ function threats.finish(job)
   return { fields = result }
 end
 
-local steppers = { machines_overview = overview, area = area, power_overview = power, threats = threats }
+local defenses = {}
+
+function defenses.work(job, si, x0, y0, size)
+  local surface_name = job.surfaces[si]
+  return scan_area(job, si, x0, y0, size, function(j, entity)
+    defenses_scan.add(j.acc, defenses_scan.record(entity), surface_name)
+  end, { type = defenses_scan.DEFENSE_TYPES, force = job.params.force })
+end
+
+function defenses.finish(job)
+  local out = defenses_scan.finish(job.acc)
+  return {
+    fields = { summary = out.summary, by_surface = out.by_surface, groups = out.groups, problems_total = out.problems_total },
+    list_name = "problems", list = out.problems,
+  }
+end
+
+local steppers = {
+  machines_overview = overview, area = area, power_overview = power, threats = threats, defenses_overview = defenses,
+}
 
 function M.stepper(kind)
   return steppers[kind]

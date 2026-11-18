@@ -181,4 +181,17 @@ assert(threats_page.radius == 500 and threats_page.center.surface == "nauvis")
 local tb_ok, tb_err = pcall(kinds.plan, "threats", { caller = "alice", surface = "nauvis", x = 0, y = 0, radius = 2000 })
 assert(not tb_ok and tb_err.code == "bad_params", "radius above the job bound")
 
+-- defenses_overview: dry turrets of the caller's force over the whole surface, with gps
+_G.defines.inventory.turret_ammo = 1
+local function dry(x, force)
+  return { name = "gun-turret", type = "ammo-turret", position = { x = x, y = 1 }, valid = true, force = force,
+    health = 400, max_health = 400,
+    get_inventory = function() return { valid = true, get_contents = function() return {} end } end }
+end
+local def_surface = make_surface({ dry(2), dry(40), dry(70, { name = "enemy" }) }, { { x = 0, y = 0 }, { x = 1, y = 0 }, { x = 2, y = 0 } })
+local def_page = run("defenses_overview", { caller = "alice" }, def_surface)
+assert(def_page.summary.issues.no_ammo == 2, "two own dry turrets, the enemy one filtered by force")
+assert(def_page.by_surface.nauvis.problems == 2)
+assert(def_page.problems[1].gps:match("nauvis%]$"))
+
 print("job_kinds_test ok")
