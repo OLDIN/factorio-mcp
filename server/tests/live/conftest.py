@@ -49,3 +49,28 @@ def game_log_errors():
         return sum(1 for line in GAME_LOG.read_text(errors="replace").splitlines() if "Error" in line)
 
     return count
+
+
+async def _sc(link: RconLink, code: str) -> str:
+    return await link.exec("/sc " + code.replace("\n", " "), timeout=20)
+
+
+@pytest_asyncio.fixture
+async def armed(rcon):
+    """The RCON link after the first /sc (which only asks to disable achievements) is spent."""
+    await rcon.exec("/sc rcon.print('ready')", timeout=10)
+    await rcon.exec("/sc rcon.print('ready')", timeout=10)
+    return rcon
+
+
+@pytest_asyncio.fixture
+async def caller_nick(armed) -> str:
+    """The first player record in the dev save, used as `caller`; skips when the save has none.
+
+    The name is read at runtime so no real nick is written into the repo. A save gets a player
+    record once someone has joined the dev server.
+    """
+    name = (await _sc(armed, "local p = game.players[1]; rcon.print(p and p.name or '')")).strip()
+    if not name:
+        pytest.skip("the dev save has no player record (join the dev server once); caller-based check skipped")
+    return name
