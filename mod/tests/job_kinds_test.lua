@@ -1,7 +1,7 @@
 package.path = "factorio-mcp/?.lua;tests/?.lua;" .. package.path
 local env = require("support.env")
 env.fresh()
-_G.defines = { entity_status = { working = 1, no_ingredients = 2 }, inventory = {} }
+_G.defines = { entity_status = { working = 1, no_ingredients = 2, no_power = 3 }, inventory = {} }
 local engine = require("scripts.logic.job_engine")
 local kinds = require("scripts.logic.job_kinds")
 local area_scan = require("scripts.logic.area_scan")
@@ -23,9 +23,12 @@ local function make_surface(entities, chunks)
   end
   local function select(filter)
     assert(type(filter.type) == "table" and filter.area and not filter.position, "allowlisted types, by area")
+    local types = {}
+    for _, t in ipairs(filter.type) do types[t] = true end
     local out = {}
     for _, e in ipairs(entities) do
-      if inside(e, filter.area) then out[#out + 1] = e end
+      local force_ok = filter.force == nil or (e.force and e.force.name or "player") == filter.force
+      if inside(e, filter.area) and types[e.type] and force_ok then out[#out + 1] = e end
     end
     return out
   end
@@ -41,7 +44,10 @@ local function make_surface(entities, chunks)
 end
 
 local function run(kind, params, surface)
-  _G.game = { surfaces = { nauvis = surface }, get_surface = function(name) return name == "nauvis" and surface or nil end }
+  _G.game = {
+    surfaces = { nauvis = surface }, get_surface = function(name) return name == "nauvis" and surface or nil end,
+    get_player = function(name) if name == "alice" then return { name = "alice", force = { name = "player" } } end end,
+  }
   local plan = kinds.plan(kind, params)
   plan.mode = "idle"
   plan.initial_items = math.floor(#plan.work / 4)  -- the work list is consumed by the run
@@ -119,5 +125,24 @@ limits.MAX_JOB_CHUNKS = 2
 local ok, err = pcall(kinds.plan, "machines_overview", {})
 limits.MAX_JOB_CHUNKS = saved
 assert(not ok and err.code == "bad_params", "the size limit must be enforced")
+
+-- power_overview: the caller's force is resolved at planning; other forces' poles are not read
+_G.defines.flow_precision_index = { five_seconds = 0 }
+local function stats() return { output_counts = {}, input_counts = { lamp = 1 }, get_flow_count = function() return 10 end } end
+local power_entities = {
+  { name = "small-electric-pole", type = "electric-pole", position = { x = 3, y = 3 }, valid = true,
+    electric_network_id = 1, electric_network_statistics = stats() },
+  { name = "small-electric-pole", type = "electric-pole", position = { x = 6, y = 3 }, valid = true,
+    electric_network_id = 2, electric_network_statistics = stats(), force = { name = "enemy" } },
+  machine("asm", 4, 4, 3, "gear"),
+}
+power_entities[3].electric_network_id = 1
+local power_surface = make_surface(power_entities, { { x = 0, y = 0 } })
+local power_page, power_plan = run("power_overview", { caller = "alice" }, power_surface)
+assert(power_plan.params.force == "player", "force from the caller")
+assert(power_page.summary.networks == 1, "the enemy pole is filtered out")
+assert(power_page.networks[1].starved.no_power == 1)
+local bad_ok, bad_err = pcall(kinds.plan, "power_overview", { caller = "nobody" })
+assert(not bad_ok and bad_err.code == "not_found", "unknown caller")
 
 print("job_kinds_test ok")

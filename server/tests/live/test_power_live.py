@@ -52,3 +52,20 @@ async def test_power_unknown_caller(armed):
     with pytest.raises(ModError) as info:
         await ModBridge(armed).call("power", {"caller": "nobody-here-123", "surface": "nauvis", "x": 0, "y": 0})
     assert info.value.code == "not_found"
+
+
+async def test_power_overview_job_finds_the_network(armed, caller_nick):
+    where = json.loads(await sc(armed, SETUP))
+    await asyncio.sleep(1)
+    bridge = ModBridge(armed)
+    start = await bridge.call("job_start", {"kind": "power_overview", "params": {"caller": caller_nick}, "mode": "idle"})
+    for _ in range(200):
+        page = await bridge.call("job_result", {"job_id": start["job_id"]})
+        if page["state"] == "done":
+            break
+        await asyncio.sleep(0.1)
+    assert page["state"] == "done"
+    assert page["summary"]["networks"] >= 2
+    surfaces = {n["surface"] for n in page["networks"]}
+    assert "nauvis" in surfaces
+    assert where  # built for this run

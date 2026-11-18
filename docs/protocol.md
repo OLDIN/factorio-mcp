@@ -61,6 +61,7 @@ vehicles (also modded ones) and containers are never queried, so their contents 
 
 Large queries run as jobs spread over game ticks so players do not feel them.
 
+- `job_start` kind `power_overview` (`params: {caller, surfaces?}`, mod 0.4.0+): every electric network of the caller's force; result `{summary: {networks, starved_networks, tiny}, networks: [{id, surface, poles, gps, produced_kw, consumed_kw, top_producers, top_consumers, starved, accumulators}]}`, most starved first; networks under 3 poles with nothing consuming are only counted in `tiny`.
 - `job_start` kinds: `machines_overview` (`params: {surfaces?: [name]}`, the whole map) and `area`
   (`params: {surface, x, y, radius, max_listed?}`, radius up to 1000).
 - **Method.** The map is cut into 512-tile blocks. A block's allowlisted entities are counted (cheap);

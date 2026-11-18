@@ -22,6 +22,7 @@ It has two parts:
 | `base_machines_overview` | The same picture for the whole base, per surface and recipe |
 | `production_stats` | Items and fluids produced and consumed per minute (5 s to 10 h windows), top producers, consumers and deficits, one item per surface and quality |
 | `inspect_power` | Electric networks around a point: power produced and consumed now, biggest producers and consumers, accumulator charge, machines short of power |
+| `base_power_overview` | Every electric network of the base, the ones with machines short of power first |
 | `inspect_defenses` | Turrets, walls, gates, mines and radars around a `[gps]` point, a player, or yourself: ammo and flamethrower fluid, power, damage, and the worst problems first (needs mod 0.3.0+) |
 
 Large queries (big areas, the whole base) are split over many game ticks, so players do not feel them.
