@@ -23,6 +23,7 @@ It has two parts:
 | `production_stats` | Items and fluids produced and consumed per minute (5 s to 10 h windows), top producers, consumers and deficits, one item per surface and quality |
 | `inspect_power` | Electric networks around a point: power produced and consumed now, biggest producers and consumers, accumulator charge, machines short of power |
 | `base_power_overview` | Every electric network of the base, the ones with machines short of power first |
+| `research_status` | What is being researched and how far, the queue, what can be researched now, what one technology still needs |
 | `inspect_defenses` | Turrets, walls, gates, mines and radars around a `[gps]` point, a player, or yourself: ammo and flamethrower fluid, power, damage, and the worst problems first (needs mod 0.3.0+) |
 
 Large queries (big areas, the whole base) are split over many game ticks, so players do not feel them.

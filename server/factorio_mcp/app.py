@@ -22,7 +22,7 @@ from .config import Settings
 from .identity import current_identity, reset_identity, set_identity
 from .instructions import INSTRUCTIONS
 from .tokens import TokenStore
-from .tools import area, defenses, overview, players, power, production, reference, server
+from .tools import area, defenses, overview, players, power, production, reference, research, server
 from .tools.registry import ToolSpec, visible
 
 _LOGGER = logging.getLogger(__name__)
@@ -113,6 +113,7 @@ def create_app(settings: Settings, bridge: ModBridge, tokens: TokenStore) -> ASG
         *overview.specs(bridge),
         *production.specs(bridge),
         *power.specs(bridge),
+        *research.specs(bridge),
     ]
     registered: set[str] = set()
 

@@ -12,6 +12,7 @@ require("scripts.commands.area")
 require("scripts.commands.defenses")
 require("scripts.commands.production")
 require("scripts.commands.power")
+require("scripts.commands.research")
 require("scripts.commands.job")
 
 commands.add_command(
