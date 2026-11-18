@@ -67,3 +67,8 @@ async def test_call_mod_returns_result():
     bridge = _Bridge(result={"ok": 1})
     assert await call_mod(bridge, "production", {"caller": "a"}) == {"ok": 1}
     assert bridge.calls == [("production", {"caller": "a"})]
+
+
+async def test_call_mod_offline_player_suggests_gps():
+    with pytest.raises(ToolError, match=r"give a \[gps=x,y,surface\] tag"):
+        await call_mod(_Bridge(ModError("not_found", "player is offline: position unknown")), "power", {})

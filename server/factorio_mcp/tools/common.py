@@ -12,6 +12,7 @@ from ..identity import current_identity
 
 # Mod errors the person asking can act on; their messages are plain and safe to show.
 USER_ERRORS = ("not_found", "bad_params")
+OFFLINE = "player is offline: position unknown"
 
 
 def point_args(gps: str | None, player: str | None) -> dict[str, Any]:
@@ -36,6 +37,8 @@ async def call_mod(bridge: ModBridge, sub: str, args: dict[str, Any]) -> Any:
     try:
         return await bridge.call(sub, args)
     except ModError as err:
+        if err.message == OFFLINE:
+            raise ToolError("That player is offline, so there is no position: give a [gps=x,y,surface] tag.") from None
         if err.code in USER_ERRORS:
             raise ToolError(err.message) from None
         raise
