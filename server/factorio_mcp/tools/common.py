@@ -6,9 +6,11 @@ from typing import Any
 
 from mcp.server.mcpserver.exceptions import ToolError
 
-from ..bridge import ModBridge, ModError
+from .. import jobs
+from ..bridge import ModBridge, ModError, normalize_lists
 from ..gps import GpsParseError, parse_gps
 from ..identity import current_identity
+from ..jobs import JobRunner, user_message
 
 # Mod errors the person asking can act on; their messages are plain and safe to show.
 USER_ERRORS = ("not_found", "bad_params")
@@ -41,4 +43,25 @@ async def call_mod(bridge: ModBridge, sub: str, args: dict[str, Any]) -> Any:
             raise ToolError("That player is offline, so there is no position: give a [gps=x,y,surface] tag.") from None
         if err.code in USER_ERRORS:
             raise ToolError(err.message) from None
+        raise
+
+
+async def locate(bridge: ModBridge, nick: str) -> dict[str, Any]:
+    """A player's position as {surface, x, y} (positions are public); a job needs a point."""
+    for entry in normalize_lists(await bridge.call("players"), ["players"])["players"]:
+        if entry.get("name") == nick:
+            if not entry.get("online") or entry.get("position") is None:
+                raise ToolError("That player is offline, so there is no position: give a [gps=x,y,surface] tag.")
+            return {"surface": entry["surface"], "x": entry["position"]["x"], "y": entry["position"]["y"]}
+    raise ToolError(f"No such player: {nick}.")
+
+
+async def run_job(runner: JobRunner, kind: str, params: dict[str, Any], job_id: str | None) -> dict[str, Any]:
+    """Start (or resume with job_id) a tick-split job; errors the person can act on become ToolError."""
+    try:
+        return await runner.run(kind, params, owner=current_identity().name, wait=jobs.SOFT_TIMEOUT, handle=job_id)
+    except ModError as err:
+        message = user_message(err) or (err.message if err.code in USER_ERRORS else None)
+        if message:
+            raise ToolError(message) from None
         raise

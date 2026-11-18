@@ -2,13 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.mcpserver.exceptions import ToolError
-
-from .. import jobs
-from ..bridge import ModBridge, ModError, normalize_lists, normalize_maps
-from ..identity import current_identity
-from ..jobs import JobRunner, user_message
-from .common import USER_ERRORS, call_mod, caller_args, point_args
+from ..bridge import ModBridge, normalize_lists, normalize_maps
+from ..jobs import JobRunner
+from .common import call_mod, caller_args, point_args, run_job
 from .registry import ToolSpec
 
 NETWORK_LISTS = ["networks.*.top_producers", "networks.*.top_consumers"]
@@ -37,15 +33,7 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         return result
 
     async def base_power_overview(job_id: str | None = None, limit: int = 15, offset: int = 0) -> dict[str, Any]:
-        try:
-            result = await runner.run(
-                "power_overview", caller_args(), owner=current_identity().name, wait=jobs.SOFT_TIMEOUT, handle=job_id
-            )
-        except ModError as err:
-            message = user_message(err) or (err.message if err.code in USER_ERRORS else None)
-            if message:
-                raise ToolError(message) from None
-            raise
+        result = await run_job(runner, "power_overview", caller_args(), job_id)
         if result.get("status") == "running":
             return result
         normalize_lists(result, ["networks", *NETWORK_LISTS])
