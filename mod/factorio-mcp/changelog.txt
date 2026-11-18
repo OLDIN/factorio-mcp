@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.0
+Date: 2026-11-18
+  Features:
+    - New read-only subcommand "defenses": turrets, walls, gates, land mines and radars around a point or a player, with ammo, flamethrower fluid, power, damage and a prioritized problem list. Enemy and neutral entities are skipped.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.1
 Date: 2026-11-16
   Changes:
