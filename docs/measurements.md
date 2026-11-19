@@ -266,3 +266,21 @@ within 64).
   envelope; ~1.2 ms each). Now the budget check's encoding is the reply (`envelope.encode_result` /
   `ok_encoded`), and a machine is asked only for the inventories its type has: **2.7 ms** (1.65 ms
   with the default 20, 0.8 ms at r=32). The worst `defenses_overview` tick went from 3.0 to 2.0 ms.
+
+
+## Diagnostics: mining drills (0.4.0 follow-up)
+
+Same copy of the real save and method as above (server under `nice 15`, jobs driven one 50-unit budget at a
+time in the mod's own Lua state; `.superpowers/` scripts, not in the repo). Worst case built on the copy: a
+128x128 solid iron-ore field with 100 electric drills (3x3, 25 ore tiles each) packed into one chunk and 16
+big drills next to them.
+
+- **`mining_overview`**: 1,134 drills in the real save (1,268 with the synthetic block), `job_start` 0.2-0.5 ms.
+  Each drill costs about 27 us (one `find` of its target resource in its square mining area).
+- **First design, chunk-sized leaf areas**: the packed chunk (about 100 drills) was one work item of 3.3 ms.
+  Leaf areas now go down to 8x8 tiles and split above 12 drills: **median tick 0.13 ms, p99 1.4 ms, max
+  2.2 ms** (the same two 512-tile block counts every whole-map job has), 262 ticks, 4.7 s wall at 60.0 UPS.
+- **Accuracy**: for 5 drills the mod's `remaining` equals an independent sum over the same square (live
+  test); the job's drill count equals `count_entities_filtered` of `mining-drill` over all surfaces.
+- **API 2.1.24**: `LuaEntity.mining_target` is nil on a depleted drill (96 of 1,134 in this save); pumpjack
+  targets have `prototype.infinite_resource`, so their `amount` is turned into a yield percent.

@@ -8,6 +8,7 @@ from .. import jobs
 from ..bridge import ModBridge, ModError, normalize_lists, normalize_maps
 from ..identity import current_identity
 from ..jobs import JobRunner, user_message
+from .common import caller_args, page, run_job
 from .registry import ToolSpec
 
 
@@ -77,6 +78,34 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         normalize_maps(result, ["groups.*.by_status"])
         return compact(result, limit, offset, only_stopped)
 
+    async def base_mining_overview(
+        surfaces: list[str] | None = None,
+        job_id: str | None = None,
+        limit: int = 25,
+        offset: int = 0,
+        resource: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {**caller_args(), "limit": min(100, max(25, offset + limit))}
+        if surfaces is not None:
+            params["surfaces"] = list(dict.fromkeys(surfaces))[:MAX_SURFACES]
+        result = await run_job(runner, "mining_overview", params, job_id)
+        if result.get("status") == "running":
+            return result
+        normalize_lists(result, ["groups", "worst"])
+        groups, worst = result.get("groups", []), result.get("worst", [])
+        if resource is not None:
+            groups = [g for g in groups if g.get("resource") == resource]
+            worst = [w for w in worst if w.get("resource") == resource]
+        listed, nxt = page(worst, limit, offset)
+        return {
+            "summary": result.get("summary", {}),
+            "groups": groups,
+            "worst": listed,
+            "worst_total": len(worst),
+            "offset": max(0, offset),
+            "next": nxt,
+        }
+
     return [
         ToolSpec(
             "base_machines_overview",
@@ -85,5 +114,13 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
             "groups per surface and recipe, the most stuck first, with why they stand and up to 3 positions. "
             "only_stopped=false also lists fully working groups; surfaces= limits the scan.",
             base_machines_overview,
-        )
+        ),
+        ToolSpec(
+            "base_mining_overview",
+            "threats",  # the mining_overview job kind ships with mod 0.4.0, as does `threats`
+            "Your mining drills on the whole base: how many are depleted or running low (ore left in reach "
+            "under 5,000, or oil yield under 20%), per surface and resource, and the worst first with [gps]. "
+            "resource= filters; surfaces= limits the scan.",
+            base_mining_overview,
+        ),
     ]

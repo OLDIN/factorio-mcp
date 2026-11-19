@@ -244,6 +244,45 @@ for _, bad in ipairs({
   assert(not ok and type(err) == "table" and err.code, "expected a coded error for " .. bad[1])
 end
 
+-- mining_overview: drills of the caller's force over the whole surface; the ore in each drill's reach
+_G.defines.entity_status.no_minable_resources = 9
+local function drill(x, y, target, force)
+  return { name = "electric-mining-drill", type = "mining-drill", position = { x = x, y = y }, valid = true,
+    force = force, status = 1, mining_target = target, prototype = { mining_drill_radius = 2.49 } }
+end
+local mine_ore = {}
+local function mine_resource(x, y, amount)
+  local r = { name = "iron-ore", type = "resource", position = { x = x, y = y }, valid = true, amount = amount,
+    prototype = { infinite_resource = false, normal_resource_amount = 0 } }
+  mine_ore[#mine_ore + 1] = r
+  return r
+end
+local near_empty = mine_resource(2, 2, 300)
+local rich_ore = mine_resource(40, 2, 90000)
+local mining_surface = make_surface({ drill(2, 2, near_empty), drill(40, 2, rich_ore), drill(70, 2, nil),
+  drill(100, 2, near_empty, { name = "enemy" }) }, { { x = 0, y = 0 }, { x = 1, y = 0 }, { x = 2, y = 0 }, { x = 3, y = 0 } })
+local plain_mining_find = mining_surface.find_entities_filtered
+mining_surface.find_entities_filtered = function(filter)
+  if filter.name then -- a resource lookup under one drill
+    local out = {}
+    for _, r in ipairs(mine_ore) do
+      local a = filter.area
+      if r.name == filter.name and r.position.x >= a[1][1] and r.position.x <= a[2][1]
+        and r.position.y >= a[1][2] and r.position.y <= a[2][2] then out[#out + 1] = r end
+    end
+    return out
+  end
+  return plain_mining_find(filter)
+end
+local mp = run("mining_overview", { caller = "alice", limit = 5 }, mining_surface)
+assert(mp.summary.drills == 3 and mp.summary.depleted == 1 and mp.summary.low == 2, "enemy drill filtered by force")
+assert(mp.worst[1].depleted and mp.worst[2].remaining == 300 and mp.worst[2].gps == "[gps=2,2,nauvis]")
+assert(mp.groups[1].surface == "nauvis" and mp.groups[1].depleted >= 1)
+local mb_ok, mb_err = pcall(kinds.plan, "mining_overview", { caller = "alice", limit = 500 })
+assert(not mb_ok and mb_err.code == "bad_params", "limit above the bound")
+mb_ok, mb_err = pcall(kinds.plan, "mining_overview", { caller = "nobody" })
+assert(not mb_ok and mb_err.code == "not_found", "unknown caller")
+
 -- planning takes the occupied blocks from storage when they are known: no walk over every chunk
 local chunk_blocks = require("scripts.logic.chunk_blocks")
 local walked = false
