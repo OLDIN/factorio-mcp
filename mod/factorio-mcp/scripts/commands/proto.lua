@@ -35,12 +35,21 @@ local kinds = {
   planets = { collection = function() return prototypes.space_location end, render = nil },
 }
 
+-- Sorted names per kind. Walking and sorting a whole prototype collection took ~4-5 ms per page
+-- (thousands of entity prototypes); prototypes never change while the game runs, so it is done once per
+-- kind. Module-local (not storage): it only shapes replies, never game state.
+local names_cache = {}
+
 for kind, spec in pairs(kinds) do
   dispatcher.register("proto_" .. kind, function(params)
     local offset = int_param(params, "offset", 0, 0, 10000000)
     local limit = int_param(params, "limit", DEFAULT_LIMIT, 1, MAX_LIMIT)
     local collection = spec.collection()
-    local names = render.names(collection, spec.predicate)
+    local names = names_cache[kind]
+    if not names then
+      names = render.names(collection, spec.predicate)
+      names_cache[kind] = names
+    end
     local draw
     if kind == "planets" then
       local defaults = surface_property_defaults()
@@ -48,7 +57,7 @@ for kind, spec in pairs(kinds) do
     else
       draw = function(name) return spec.render(collection[name]) end
     end
-    local items, nxt = paging.page(names, offset, limit, draw, limits.RESPONSE_BUDGET_BYTES)
+    local items, nxt = paging.page(names, offset, limit, draw, limits.PROTO_PAGE_BUDGET_BYTES)
     return { kind = kind, total = #names, offset = offset, items = items, next = nxt }
   end)
 end

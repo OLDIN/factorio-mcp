@@ -220,3 +220,42 @@ runs as a job whose single tick stays around 2 ms.
   windows.
 - **Factorio 2.1 API.** `LuaEntity.fluidbox` does not exist (use `fluids_count`, `get_fluid(i)`);
   an offline player has no character and `get_main_inventory()` returns an empty stand-in.
+
+
+## Every command at its maximum, and the jobs (Task 15, 0.4.0)
+
+Same copy of the real save and method as above (server under `nice 15`, in-game profiler around the
+mod's handler, average of 5). Worst spots were searched in the save itself: the densest machines
+(333 within 64 tiles), the most enemies (1,101 spawners and worms within 256), the most defenses (1,479
+within 64).
+
+- **Synchronous commands at their maximum radius/limit** (ms in game, reply bytes): hello 0.29
+  (5.8 KB), server_info 0.84 (9.7 KB), players 0.05, area r=64 max_listed 50 3.9 (17.8 KB), defenses
+  r=64 max_listed 50 4.6 (0.6 KB), production 10h limit 50 2.4 (25 KB), 1m 1.6 (4 KB), power r=64 0.49,
+  research limit 50 0.66, threats r=256 limit 30 2.6 (3.8 KB; r=128 0.77, so the sync cap stays 256),
+  pollution grid 15 0.72, logistics limit 50 0.85 (5.6 KB), trains limit 50 0.81 (8.3 KB), platforms
+  0.01 (no Space Age platforms in this save), inventory 0.01, alerts limit 20 0.10, resources r=128 0.07
+  (`job_needed`), transport r=32 0.68, job_status 0.01. Every reply is under 48,000 bytes, most under
+  12 KB.
+- **Reference pages were the outlier**: `proto_recipes` 7.4 ms and `proto_technologies` 7.4 ms per
+  page (45 KB / 38 KB). Two causes: every page walked and sorted the whole prototype collection again
+  (`pairs` over 2,951 recipe prototypes ~8 ms), and rendering costs ~0.2 ms per KB of reply. Now the
+  sorted names are kept per kind for the session (module-local, never in `storage`) and a page stops
+  at 12,000 bytes: 0.2-3.0 ms per page (recipes 3.0, machines 2.0, items 1.9, technologies 1.6). The
+  first page of a kind still pays the walk once per game session (recipes 10.4 ms). Filling the
+  service's reference cache takes ~2.3 s of RCON round trips instead of ~0.8 s, once per mod or game
+  change.
+- **Jobs in `ticks` mode** (started over RCON like the service does, polled until done; per-tick
+  times from driving the same job one budget at a time):
+
+  | Job | Wall | UPS | Ticks | Median tick | Max tick |
+  |---|---|---|---|---|---|
+  | `machines_overview` | 3.6 s | 59.8 | 191 | 0.22 ms | 2.6 ms |
+  | `power_overview` | 8.8 s | 60.0 | 509 | 0.11 ms | 1.6 ms |
+  | `defenses_overview` | 11.4 s | 60.0 | 663 | 0.35 ms | 3.0 ms |
+  | `threats` r=1000 | 4.2 s | 59.7 | 218 | 0.11 ms | 0.9 ms |
+  | `resources_overview` | 14.0 s | 60.0 | 832 | 0.28 ms | 1.9 ms |
+
+  `job_start` 0.14-0.31 ms for every kind.
+- **Left as they are** (under the 5 ms criterion, above the ~2 ms aim): `defenses` r=64 at a wall-heavy
+  spot 4.6 ms, `area` r=64 3.9 ms, the worst `defenses_overview` tick 3.0 ms.
