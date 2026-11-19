@@ -21,7 +21,7 @@ The reply is a single line of JSON printed with `rcon.print`:
   normalizes known list and map fields.
 - The mod never changes the world, never writes files and does nothing in the background except
   an `on_tick` handler while a tick-split job is running, and an `on_chunk_generated` handler that
-  widens the stored bounding box of the surface's generated chunks (a few comparisons per new chunk).
+  notes which 512-tile block the new chunk lies in (one table write per new chunk).
 
 ## Error codes
 
@@ -92,9 +92,11 @@ Large queries run as jobs spread over game ticks so players do not feel them.
   `idle` when nobody is online, which also works when the game is paused. A caller may force either.
 - Poll `job_result` until `state` is `done`; `progress` is the share of the map area finished.
   Results are paged with `offset` and `next`; the job is removed after its last page. Unfetched
-  results expire after 36,000 ticks; at most 8 are kept, at most 4 jobs run at once, and a surface
-  whose generated chunks span more than 250,000 chunks is refused. The span comes from
-  `storage.mcp_bounds`, kept by `on_chunk_generated` and filled once at load time, so starting a job
-  never walks every chunk (that walk took ~25 ms in one tick on a real map).
+  results expire after 36,000 ticks; at most 8 are kept, at most 4 jobs run at once.
+- **Which blocks.** A whole-map job visits only the 512-tile blocks that hold generated chunks
+  (`storage.mcp_blocks`, kept by `on_chunk_generated` and filled once at load time), so a far-away
+  chunk adds one block, not the empty box between it and the base, and starting a job never walks
+  every chunk (that walk took ~25 ms in one tick on a real map). More than 4,000 occupied blocks
+  (about a million chunks of explored map) in one job are refused.
 - Job state lives in `storage` as plain data, so a save made mid-job resumes after loading. Jobs
   saved by an older mod version are migrated (a running one is cancelled).
