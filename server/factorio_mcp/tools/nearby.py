@@ -1,4 +1,4 @@
-"""Local details around a point: resource patches."""
+"""Local details around a point: resource patches, and belts, inserters and pipes."""
 
 from __future__ import annotations
 
@@ -18,6 +18,14 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         normalize_lists(result, ["patches"])
         return normalize_maps(result, ["surface_totals"])
 
+    async def inspect_transport(
+        gps: str | None = None, player: str | None = None, radius: float = 16.0, limit: int = 15
+    ) -> dict[str, Any]:
+        args = {**caller_args(), **point_args(gps, player), "radius": radius, "limit": limit}
+        result = await call_mod(bridge, "transport", args)
+        normalize_lists(result, ["inserters.stuck", "belts.items", "fluids"])
+        return normalize_maps(result, ["counts", "inserters.by_status"])
+
     return [
         ToolSpec(
             "inspect_resources",
@@ -26,5 +34,13 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
             "each patch with its resource, amount, tiles (or wells for crude oil, raw amount), centre [gps], "
             "most tiles first; plus the totals for the whole surface.",
             inspect_resources,
+        ),
+        ToolSpec(
+            "inspect_transport",
+            "transport",
+            "Belts, inserters and pipes of your force around a [gps] point, a player, or yourself (radius up to "
+            "32 tiles, default 16): counts, inserters by status with the stuck ones first (no power, output "
+            "blocked, waiting for items) with [gps], the items on the belts, and the fluids in pipes and tanks.",
+            inspect_transport,
         ),
     ]

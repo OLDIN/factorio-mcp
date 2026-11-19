@@ -33,6 +33,7 @@ It has two parts:
 | `my_inventory` | Your own inventory only: main inventory, armor and its equipment, guns, ammo, crafting queue |
 | `my_alerts` | Your own alerts only, by type, with counts and examples with `[gps]` |
 | `inspect_resources` | Resource patches around a point: amount, tiles (wells for oil), centre `[gps]`, and the surface totals |
+| `inspect_transport` | Belts, inserters and pipes around a point: stuck inserters first, items on belts, fluids in pipes and tanks |
 | `inspect_defenses` | Turrets, walls, gates, mines and radars around a `[gps]` point, a player, or yourself: ammo and flamethrower fluid, power, damage, and the worst problems first (needs mod 0.3.0+) |
 
 Large queries (big areas, the whole base) are split over many game ticks, so players do not feel them.

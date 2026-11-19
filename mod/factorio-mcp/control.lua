@@ -20,6 +20,7 @@ require("scripts.commands.trains")
 require("scripts.commands.platforms")
 require("scripts.commands.personal")
 require("scripts.commands.resources")
+require("scripts.commands.transport")
 require("scripts.commands.job")
 
 commands.add_command(

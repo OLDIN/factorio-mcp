@@ -6,7 +6,7 @@ from stack_fixture import hello_reply
 
 from factorio_mcp.commands import build_command
 
-ALL = ("hello", "server_info", "players", "resources")
+ALL = ("hello", "server_info", "players", "resources", "transport")
 
 
 def _env(result):
@@ -61,4 +61,38 @@ async def test_resources_hidden_on_an_old_mod(stack):
     await _setup(stack, ("hello", "server_info", "players"))
     r = await stack.rpc("tools/list", {})
     names = {t["name"] for t in r.json()["result"]["tools"]}
-    assert "inspect_resources" not in names
+    assert "inspect_resources" not in names and "inspect_transport" not in names
+
+
+TRANSPORT = {
+    "center": {"surface": "nauvis", "x": 0, "y": 0},
+    "radius": 16,
+    "counts": {"transport-belt": 40, "inserter": 3},
+    "inserters": {
+        "by_status": {"working": 2, "waiting_for_space_in_destination": 1},
+        "stuck": [{"name": "inserter", "gps": "[gps=3,4,nauvis]", "status": "waiting_for_space_in_destination"}],
+        "stuck_total": 1,
+    },
+    "belts": {"items": [{"name": "iron-plate", "count": 57}]},
+    "fluids": [{"name": "water", "amount": 1200}],
+}
+
+
+async def test_transport_defaults_around_yourself(stack):
+    await _setup(stack)
+    cmd = build_command("transport", {"caller": "aliceNick", "player": "aliceNick", "radius": 16.0, "limit": 15})
+    stack.fake.responses[cmd] = _env(TRANSPORT)
+    data = _data(await _tool(stack, "inspect_transport", {}))
+    assert data["inserters"]["stuck"][0]["status"] == "waiting_for_space_in_destination"
+    assert data["belts"]["items"][0]["name"] == "iron-plate"
+
+
+async def test_transport_another_player_and_empty(stack):
+    await _setup(stack)
+    cmd = build_command("transport", {"caller": "aliceNick", "player": "bobNick", "radius": 32.0, "limit": 15})
+    empty = {**TRANSPORT, "counts": [], "inserters": {"by_status": [], "stuck": {}, "stuck_total": 0},
+             "belts": {"items": {}}, "fluids": {}}
+    stack.fake.responses[cmd] = _env(empty)
+    data = _data(await _tool(stack, "inspect_transport", {"player": "bobNick", "radius": 32}))
+    assert data["counts"] == {} and data["inserters"]["by_status"] == {} and data["inserters"]["stuck"] == []
+    assert data["belts"]["items"] == [] and data["fluids"] == []
