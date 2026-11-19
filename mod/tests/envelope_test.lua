@@ -31,4 +31,12 @@ local err = json.decode(envelope.err("not_found", "no such player\nbob"))
 assert(err.v == 1 and err.ok == false and err.error.code == "not_found")
 assert(not envelope.err("x", "line1\nline2"):find("\n"))
 
+-- a result already encoded (and sanitized) by its handler is wrapped, not encoded a second time
+local pre = envelope.ok_encoded('{"answer":42}')
+local pd = json.decode(pre)
+assert(pd.v == 1 and pd.ok == true and pd.result.answer == 42 and not pre:find("\n"))
+-- encode_result: sanitized and encoded once, usable as both a size check and the reply
+local enc = envelope.encode_result({ a = 1, bad = 0 / 0 })
+assert(json.decode(enc).a == 1 and json.decode(enc).bad == nil)
+
 print("envelope_test ok")

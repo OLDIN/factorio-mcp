@@ -51,7 +51,8 @@ function M.execute(parameter)
     params = decoded
   end
 
-  local called, result = pcall(handler, params)
+  -- a handler may return its result already encoded (envelope.encode_result) as a second value
+  local called, result, encoded = pcall(handler, params)
   if not called then
     if type(result) == "table" and type(result.code) == "string" then
       return fail(result.code, result.message)
@@ -63,8 +64,9 @@ function M.execute(parameter)
     log("factorio-mcp: command '" .. sub .. "' returned " .. type(result))
     return fail("internal", "internal error")
   end
-  local encoded, reply = pcall(envelope.ok, result)
-  if not encoded then
+  if type(encoded) == "string" then return envelope.ok_encoded(encoded) end
+  local done, reply = pcall(envelope.ok, result)
+  if not done then
     log("factorio-mcp: command '" .. sub .. "' reply could not be encoded: " .. tostring(reply))
     return fail("internal", "internal error")
   end

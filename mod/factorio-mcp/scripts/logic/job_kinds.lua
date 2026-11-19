@@ -369,7 +369,7 @@ local defenses = {}
 function defenses.work(job, si, x0, y0, size)
   local surface_name = job.surfaces[si]
   return scan_area(job, si, x0, y0, size, function(j, entity)
-    defenses_scan.add(j.acc, defenses_scan.record(entity), surface_name)
+    defenses_scan.add(j.acc, defenses_scan.record(entity, true), surface_name) -- force filtered in the search
   end, { type = defenses_scan.DEFENSE_TYPES, force = job.params.force })
 end
 

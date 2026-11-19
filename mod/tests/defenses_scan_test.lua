@@ -135,4 +135,37 @@ local trimmed = defenses_scan.scan(surface, { x = 0, y = 0 }, 64, 2)
 assert(#trimmed.problems == 2, "expected problems trimmed to 2")
 assert(trimmed.problems_total == 4, "expected problems_total 4")
 
+-- Speed (a wall-heavy spot has ~1,400 walls in 64 tiles): a healthy wall's position is never read,
+-- and with game.forces at hand the force is filtered in the search, not read per entity.
+local function strict(fields)
+  return setmetatable({}, { __index = function(_, k)
+    local v = fields[k]
+    if v == nil then error("read of " .. k) end
+    return v
+  end })
+end
+local healthy = strict({ valid = true, name = "stone-wall", type = "wall", health = 350, max_health = 350,
+  force = { name = "player" } })
+local hr = defenses_scan.record(healthy)
+assert(hr and not hr.damaged and hr.x == nil, "healthy wall: no position read")
+local strict_damaged = strict({ valid = true, name = "stone-wall", type = "wall", health = 10, max_health = 350,
+  position = { x = 5, y = 6 } })
+local acc_fast = defenses_scan.new_acc(5)
+_G.game = { forces = { player = { name = "player" }, enemy = { name = "enemy" }, neutral = { name = "neutral" },
+  ["player-2"] = { name = "player-2" } } }
+local seen_force
+local fast_surface = {
+  name = "nauvis",
+  find_entities_filtered = function(filter)
+    seen_force = filter.force
+    return { healthy, strict_damaged }
+  end,
+}
+local fast = defenses_scan.scan(fast_surface, { x = 0, y = 0 }, 64, 5)
+table.sort(seen_force)
+assert(seen_force and #seen_force == 2 and seen_force[1] == "player" and seen_force[2] == "player-2",
+  "enemy and neutral filtered in the search")
+assert(fast.summary.walls == 2 and fast.problems_total == 1 and fast.problems[1].x == 5, "damaged wall listed with its position")
+_G.game = nil
+
 print("defenses_scan_test ok")

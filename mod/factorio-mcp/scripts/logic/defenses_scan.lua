@@ -20,12 +20,6 @@ M.DEFENSE_TYPES = {
   "radar",
 }
 
-local function read(obj, field)
-  local ok, val = pcall(function() return obj[field] end)
-  if ok then return val end
-  return nil
-end
-
 local function is_turret_type(etype)
   return etype == "ammo-turret" or etype == "electric-turret" or etype == "fluid-turret"
     or etype == "turret" or etype == "artillery-turret"
@@ -33,15 +27,6 @@ end
 
 local function is_wall_type(etype)
   return etype == "wall" or etype == "gate"
-end
-
--- Worms are type "turret" on the enemy force; neutral entities are map decoration.
--- Neither is part of anyone's defense, so they are skipped.
-local function is_hostile_or_neutral(entity)
-  local force = read(entity, "force")
-  if not force then return false end
-  local fname = read(force, "name")
-  return fname == "enemy" or fname == "neutral"
 end
 
 local function ammo_of(entity, etype)
@@ -77,15 +62,23 @@ local function fluid_of(entity)
   return amount, dict
 end
 
--- One entity -> plain record, or nil when it is invalid or not part of anyone's defense.
-function M.record(entity)
-  if not entity.valid or is_hostile_or_neutral(entity) then return nil end
+-- Plain field reads in one function, wrapped by one pcall in M.record (a closure per read cost ~4 us
+-- per wall, and a wall-heavy spot has ~1,400 walls). The position is read only for problems.
+local function record_raw(entity, force_filtered)
+  -- Worms are type "turret" on the enemy force; neutral entities are map decoration. Neither is part of
+  -- anyone's defense. Skipped here unless the search already filtered the force.
+  if not force_filtered then
+    local force = entity.force
+    if force then
+      local fname = force.name
+      if fname == "enemy" or fname == "neutral" then return nil end
+    end
+  end
   local etype = entity.type
-  local pos = entity.position
-  local health = read(entity, "health") or 0
-  local max_health = read(entity, "max_health") or 0
+  local health = entity.health or 0
+  local max_health = entity.max_health or 0
   local r = {
-    name = entity.name, type = etype, x = pos.x, y = pos.y, health = health, max_health = max_health,
+    name = entity.name, type = etype, health = health, max_health = max_health,
     damaged = max_health > 0 and health < max_health,
     is_turret = is_turret_type(etype), is_wall = is_wall_type(etype),
   }
@@ -93,12 +86,25 @@ function M.record(entity)
     r.ammo, r.ammo_dict = ammo_of(entity, etype)
     if r.ammo == 0 then r.issue = "no_ammo" end
   elseif etype == "electric-turret" or etype == "radar" then
-    if (read(entity, "energy") or 0) <= 0 then r.issue = "no_power" end
+    if (entity.energy or 0) <= 0 then r.issue = "no_power" end
   elseif etype == "fluid-turret" then
     r.fluid, r.fluid_dict = fluid_of(entity)
     if r.fluid <= 0 then r.issue = "no_fluid" end
   end
+  if r.damaged or r.issue then
+    local pos = entity.position
+    r.x, r.y = pos.x, pos.y
+  end
   return r
+end
+
+-- One entity -> plain record, or nil when it is invalid or not part of anyone's defense.
+-- force_filtered: the search already kept only the forces that matter, so the force is not read.
+function M.record(entity, force_filtered)
+  if not entity.valid then return nil end
+  local ok, r = pcall(record_raw, entity, force_filtered)
+  if ok then return r end
+  return nil
 end
 
 -- keep: how many problems to list in the end
@@ -201,15 +207,28 @@ function M.finish(acc)
   }
 end
 
+-- names of every force except enemy and neutral, or nil when game.forces is not at hand
+local function own_forces()
+  local forces = game and game.forces
+  if not forces then return nil end
+  local list = {}
+  for _, force in pairs(forces) do
+    if force.name ~= "enemy" and force.name ~= "neutral" then list[#list + 1] = force.name end
+  end
+  return list
+end
+
 function M.scan(surface, center, radius, max_listed)
-  local entities = surface.find_entities_filtered({
-    position = { x = center.x, y = center.y },
-    radius = radius,
-    type = M.DEFENSE_TYPES,
-  })
+  local forces = own_forces()
   local acc = M.new_acc(max_listed)
+  local entities = {}
+  if not forces or #forces > 0 then
+    entities = surface.find_entities_filtered({
+      position = { x = center.x, y = center.y }, radius = radius, type = M.DEFENSE_TYPES, force = forces,
+    })
+  end
   for _, entity in ipairs(entities) do
-    M.add(acc, M.record(entity))
+    M.add(acc, M.record(entity, forces ~= nil))
   end
   local out = M.finish(acc)
   out.by_surface = nil
