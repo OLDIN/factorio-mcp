@@ -18,6 +18,7 @@ require("scripts.commands.pollution")
 require("scripts.commands.logistics")
 require("scripts.commands.trains")
 require("scripts.commands.platforms")
+require("scripts.commands.personal")
 require("scripts.commands.job")
 
 commands.add_command(
