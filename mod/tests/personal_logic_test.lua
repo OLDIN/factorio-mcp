@@ -38,6 +38,13 @@ assert(off.online == false and off.readable == false and off.main == nil)
 -- reading raises (no character): also unreadable, not an error
 local broken = { connected = false, get_main_inventory = function() error("no character") end }
 assert(personal_logic.inventory(broken).readable == false)
+-- Factorio 2.1, checked live: an offline player has no character, yet get_main_inventory() returns a
+-- valid EMPTY inventory; it is not the player's real inventory, so offline is always unreadable
+local ghost_inv = inv({})
+local offline_empty = { connected = false, crafting_queue_size = 0,
+  get_main_inventory = function() return ghost_inv end, get_inventory = function() return inv({}) end }
+local oe = personal_logic.inventory(offline_empty)
+assert(oe.online == false and oe.readable == false and oe.main == nil, "offline: readable false, no lists")
 
 -- alerts: grouped by type, with examples on the right surface
 local alerts = {

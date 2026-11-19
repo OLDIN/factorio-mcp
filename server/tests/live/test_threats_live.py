@@ -16,14 +16,24 @@ async def sc(rcon, code: str) -> str:
     return await rcon.exec("/sc " + code.replace("\n", " "), timeout=20)
 
 
-# A nest and a worm 150 tiles east of a fresh spot (the dev save keeps entities between runs).
+# A nest and a worm 150 tiles east of a fresh spot (the dev save keeps entities between runs). On a real map
+# the spot may be water or cliffs (then a dry spot is cleared), and natural enemies nearby are removed first.
+# No `--` comments inside: /sc gets the code as one line.
 SETUP = """
 local s = game.surfaces.nauvis
 local bx = -3000 - (game.tick % 50) * 64
 local by = 4000
-s.request_to_generate_chunks({bx + 150, by}, 3); s.force_generate_chunk_requests()
+s.request_to_generate_chunks({bx + 150, by}, 11); s.force_generate_chunk_requests()
+for _, e in ipairs(s.find_entities_filtered{position = {bx, by}, radius = 320, force = 'enemy'}) do e.destroy() end
 local function put(name, x, y)
   local p = s.find_non_colliding_position(name, {x, y}, 20, 1)
+  if not p then
+    local tiles = {}
+    for dx = -6, 6 do for dy = -6, 6 do tiles[#tiles + 1] = {name = 'grass-1', position = {x + dx, y + dy}} end end
+    s.set_tiles(tiles)
+    for _, e in ipairs(s.find_entities_filtered{area = {{x - 6, y - 6}, {x + 6, y + 6}}}) do e.destroy() end
+    p = {x, y}
+  end
   return s.create_entity{name = name, position = p, force = 'enemy'}
 end
 put('biter-spawner', bx + 150, by)

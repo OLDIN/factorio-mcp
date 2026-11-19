@@ -24,7 +24,7 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
             "my_inventory",
             "inventory",
             "Your own inventory only (never another player's): main inventory by stack size, armor and its "
-            "equipment, guns and ammo, crafting queue size. Offline, it may not be readable.",
+            "equipment, guns and ammo, crafting queue size. Not readable while you are offline.",
             my_inventory,
         ),
         ToolSpec(

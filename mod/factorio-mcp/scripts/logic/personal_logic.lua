@@ -35,6 +35,8 @@ end
 
 function M.inventory(player)
   local online = player.connected
+  -- offline (Factorio 2.1): no character, and get_main_inventory() gives an empty stand-in, not the real one
+  if not online then return { online = false, readable = false } end
   local main = safe(player.get_main_inventory)
   if not main or not main.valid then return { online = online, readable = false } end
   local guns = {}

@@ -40,6 +40,15 @@ function M.add_fluid(acc, name, amount)
   acc.fluids[name] = (acc.fluids[name] or 0) + amount
 end
 
+-- A pipe, pump or tank. Factorio 2.1 has no LuaEntity.fluidbox; get_fluid(i) is this entity's own share
+-- of its fluid segment (checked live: pipe 18/100, tank 4620/25000), so the sum counts nothing twice.
+function M.add_entity_fluids(acc, e)
+  for i = 1, e.fluids_count do
+    local f = e.get_fluid(i)
+    if f then M.add_fluid(acc, f.name, f.amount) end
+  end
+end
+
 local function sorted(map, key, top)
   local list = {}
   for name, v in pairs(map) do list[#list + 1] = { name = name, [key] = v } end

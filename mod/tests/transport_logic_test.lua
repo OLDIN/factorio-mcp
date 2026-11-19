@@ -38,6 +38,21 @@ assert(r.belts.items[1].name == "iron-plate" and r.belts.items[1].count == 5, "q
 assert(r.belts.items[2].name == "coal")
 assert(r.fluids[1].name == "crude-oil" and r.fluids[2].amount == 150, "fluids summed and rounded")
 
+-- fluids of one entity: Factorio 2.1 has no LuaEntity.fluidbox (reading it raises); fluids_count and
+-- get_fluid(i) give the entity's own share of its segment, so summing over entities counts nothing twice
+local function fluid_entity(fluids)
+  return setmetatable({
+    fluids_count = #fluids,
+    get_fluid = function(i) return fluids[i] end,
+  }, { __index = function(_, k) error("LuaEntity doesn't contain key " .. k .. ".") end })
+end
+local fl = transport_logic.new_acc(5)
+transport_logic.add_entity_fluids(fl, fluid_entity({ { name = "water", amount = 18 } }))
+transport_logic.add_entity_fluids(fl, fluid_entity({ { name = "water", amount = 4620 } }))
+transport_logic.add_entity_fluids(fl, fluid_entity({ false, { name = "steam", amount = 7 } })) -- empty box first
+local f = transport_logic.finish(fl).fluids
+assert(f[1].name == "water" and f[1].amount == 4638 and f[2].name == "steam" and f[2].amount == 7, "per-entity shares summed")
+
 -- top 10 belt items only
 local many = transport_logic.new_acc(5)
 for i = 1, 12 do transport_logic.add_belt_items(many, { { name = "item-" .. i, count = i } }) end

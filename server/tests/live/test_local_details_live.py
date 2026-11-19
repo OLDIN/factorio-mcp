@@ -31,8 +31,8 @@ async def test_unknown_caller(armed, sub):
 async def test_inventory_of_an_offline_player(armed, caller_nick):
     result = await ModBridge(armed).call("inventory", {"caller": caller_nick})
     assert result["online"] is False  # the dev server has no connected player
-    # TODO(live): pin down which shape the game gives offline, then assert only that one
-    assert result["readable"] is False or isinstance(result["main"], (list, dict))
+    # checked live (2.1.24): offline there is no character and the game hands out an empty stand-in
+    assert result == {"online": False, "readable": False}
 
 
 async def test_alerts_of_an_offline_player(armed, caller_nick):
@@ -48,7 +48,8 @@ async def test_resources_near_spawn(armed, caller_nick):
     assert result["surface_totals"].get("iron-ore", 0) > 0
 
 
-# A belt with iron plates and an unpowered inserter holding a plate between two full chests, at a fresh spot.
+# A belt with iron plates, an unpowered inserter holding a plate between two full chests, and a tank of
+# water with a pipe (2.1 has no LuaEntity.fluidbox), at a fresh spot.
 TRANSPORT_SETUP = """
 local s = game.surfaces.nauvis
 local force = game.players[1].force
@@ -64,6 +65,9 @@ for _, x in ipairs({bx - 1, bx + 1}) do
 end
 local ins = s.create_entity{name = 'inserter', position = {bx, by}, force = force, direction = defines.direction.east}
 ins.held_stack.set_stack{name = 'iron-plate', count = 1}
+local tank = s.create_entity{name = 'storage-tank', position = {bx - 3, by - 3}, force = force}
+tank.insert_fluid({name = 'water', amount = 1000})
+s.create_entity{name = 'pipe', position = {bx - 3, by - 6}, force = force}
 rcon.print(helpers.table_to_json({x = bx, y = by}))
 """
 
@@ -71,8 +75,12 @@ rcon.print(helpers.table_to_json({x = bx, y = by}))
 async def test_transport_belt_and_stuck_inserter(armed, caller_nick):
     where = json.loads(await sc(armed, TRANSPORT_SETUP))
     result = await ModBridge(armed).call(
-        "transport", {"caller": caller_nick, "surface": "nauvis", "x": where["x"], "y": where["y"], "radius": 5}
+        "transport", {"caller": caller_nick, "surface": "nauvis", "x": where["x"], "y": where["y"], "radius": 8}
     )
     assert result["counts"]["inserter"] == 1 and result["counts"]["transport-belt"] == 1
     assert result["inserters"]["stuck"] and result["inserters"]["stuck"][0]["status"] in STUCK
     assert any(i["name"] == "iron-plate" for i in result["belts"]["items"])
+    assert result["counts"]["storage-tank"] == 1 and result["counts"]["pipe"] == 1
+    water = [f for f in result["fluids"] if f["name"] == "water"]
+    assert water and 999 <= water[0]["amount"] <= 1001, "tank and pipe shares add up to what went in"
+

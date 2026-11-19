@@ -42,11 +42,7 @@ dispatcher.register("transport", function(p)
       elseif transport_logic.BELT_TYPES[t] then
         transport_logic.add_belt_items(acc, belt_contents(e))
       elseif transport_logic.FLUID_TYPES[t] then
-        local fb = e.fluidbox
-        for i = 1, #fb do
-          local f = fb[i]
-          if f then transport_logic.add_fluid(acc, f.name, f.amount) end
-        end
+        transport_logic.add_entity_fluids(acc, e)
       end
     end
   end

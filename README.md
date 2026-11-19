@@ -30,7 +30,7 @@ It has two parts:
 | `logistic_networks` | Logistic networks: robots available and total, roboports, charging queues, biggest stocks, one item across networks |
 | `list_trains` | Trains by state, problem trains first (no path, destination full, no schedule, long waits) with station, cargo and position |
 | `list_platforms` | Space platforms: state, location, speed, damage, hub stocks |
-| `my_inventory` | Your own inventory only: main inventory, armor and its equipment, guns, ammo, crafting queue |
+| `my_inventory` | Your own inventory only: main inventory, armor and its equipment, guns, ammo, crafting queue (not readable while you are offline) |
 | `my_alerts` | Your own alerts only, by type, with counts and examples with `[gps]` |
 | `inspect_resources` | Resource patches around a point: amount, tiles (wells for oil), centre `[gps]`, and the surface totals |
 | `inspect_transport` | Belts, inserters and pipes around a point: stuck inserters first, items on belts, fluids in pipes and tanks |
