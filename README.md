@@ -28,6 +28,7 @@ It has two parts:
 | `inspect_pollution` | Smoke or spores around a point, the most polluted chunks, the biggest polluters, nests the pollution reaches |
 | `base_defenses_overview` | Defenses on the whole base per surface, the worst problems first (dry, unpowered, damaged) |
 | `logistic_networks` | Logistic networks: robots available and total, roboports, charging queues, biggest stocks, one item across networks |
+| `list_trains` | Trains by state, problem trains first (no path, destination full, no schedule, long waits) with station, cargo and position |
 | `inspect_defenses` | Turrets, walls, gates, mines and radars around a `[gps]` point, a player, or yourself: ammo and flamethrower fluid, power, damage, and the worst problems first (needs mod 0.3.0+) |
 
 Large queries (big areas, the whole base) are split over many game ticks, so players do not feel them.

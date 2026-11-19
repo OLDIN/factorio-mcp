@@ -61,3 +61,37 @@ async def test_logistics_unknown_caller(stack):
     stack.fake.responses[cmd] = json.dumps({"v": 1, "ok": False, "error": {"code": "not_found", "message": "no such player"}})
     res = await _tool(stack, "logistic_networks", {})
     assert res["isError"] is True and res["content"][0]["text"].endswith("no such player")
+
+
+TRAINS = {
+    "by_state": {"on_the_path": 3, "no_path": 1}, "total": 4, "problems_total": 1,
+    "trains": [{"id": 9, "state": "no_path", "surface": "nauvis", "gps": "[gps=1,2,nauvis]", "target": "Iron",
+                "waiting_ticks": 0, "cargo": {}, "fluids": [], "problem": "no_path"}],
+}
+
+
+async def test_trains_default(stack):
+    await _setup(stack)
+    cmd = build_command("trains", {"caller": "aliceNick", "problems_only": False, "offset": 0, "limit": 15})
+    stack.fake.responses[cmd] = _env(TRAINS)
+    data = _data(await _tool(stack, "list_trains", {}))
+    assert data["trains"][0]["problem"] == "no_path"
+    assert data["trains"][0]["cargo"] == [] and data.get("next") is None
+
+
+async def test_trains_problems_only_on_a_surface(stack):
+    await _setup(stack)
+    cmd = build_command(
+        "trains", {"caller": "aliceNick", "problems_only": True, "offset": 0, "limit": 5, "surface": "nauvis"}
+    )
+    stack.fake.responses[cmd] = _env({**TRAINS, "next": 5})
+    data = _data(await _tool(stack, "list_trains", {"problems_only": True, "limit": 5, "surface": "nauvis"}))
+    assert data["next"] == 5
+
+
+async def test_trains_none(stack):
+    await _setup(stack)
+    cmd = build_command("trains", {"caller": "aliceNick", "problems_only": False, "offset": 0, "limit": 15})
+    stack.fake.responses[cmd] = _env({"by_state": [], "total": 0, "problems_total": 0, "trains": {}})
+    data = _data(await _tool(stack, "list_trains", {}))
+    assert data["trains"] == [] and data["by_state"] == {}

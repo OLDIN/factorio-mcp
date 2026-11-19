@@ -41,3 +41,47 @@ async def test_logistics_unknown_caller(armed):
     with pytest.raises(ModError) as info:
         await ModBridge(armed).call("logistics", {"caller": "nobody-here-123"})
     assert info.value.code == "not_found"
+
+
+TRAIN = """
+local s = game.surfaces.nauvis
+local bx = 6000 + (game.tick % 50) * 128
+local by = 6000
+s.request_to_generate_chunks({bx, by}, 2); s.force_generate_chunk_requests()
+for i = 0, 20 do s.create_entity{name = 'straight-rail', position = {bx + 1, by + i * 2 + 1}, force = 'player'} end
+local loco = s.create_entity{name = 'locomotive', position = {bx + 1, by + 10}, force = 'player'}
+rcon.print(helpers.table_to_json({id = loco and loco.train and loco.train.id or -1}))
+"""
+
+
+async def test_trains_lists_a_train_without_schedule(armed, caller_nick):
+    made = json.loads(await sc(armed, TRAIN))
+    assert made["id"] > 0, "the setup could not place a locomotive"
+    result = await ModBridge(armed).call("trains", {"caller": caller_nick, "limit": 50})
+    ids = {t["id"] for t in result["trains"]}
+    assert made["id"] in ids or result["next"] is not None
+    assert result["total"] >= 1
+
+
+async def test_trains_unknown_caller(armed):
+    with pytest.raises(ModError) as info:
+        await ModBridge(armed).call("trains", {"caller": "nobody-here-123"})
+    assert info.value.code == "not_found"
+
+
+async def test_train_api_fields_the_mod_reads(armed):
+    """The fields trains_logic reads exist on a real train (checked without a caller)."""
+    made = json.loads(await sc(armed, TRAIN))
+    assert made["id"] > 0, "the setup could not place a locomotive"
+    reply = await sc(
+        armed,
+        f"""
+local t = game.train_manager.get_train_by_id({made["id"]})
+local sch = t.get_schedule()
+rcon.print(helpers.table_to_json({{state = t.state, surface = t.front_stock.surface.name,
+  ticks = sch and sch.ticks_in_station or -1, contents = #t.get_contents(), group = t.group or '',
+  has_station = t.station ~= nil, has_target = t.path_end_stop ~= nil}}))
+""",
+    )
+    got = json.loads(reply)
+    assert got["surface"] == "nauvis" and isinstance(got["state"], int) and got["ticks"] >= 0
