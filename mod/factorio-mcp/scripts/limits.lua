@@ -4,6 +4,9 @@ return {
   -- Factorio delivers multi-megabyte RCON responses intact in a single packet.
   -- 48,000 bytes provides a conservative page budget (~36 KB raw JSON) ensuring fast serialization.
   RESPONSE_BUDGET_BYTES = 48000,
+  -- `proto_*` pages: rendering costs ~0.2 ms per KB (a 45 KB page of recipes took 7.4 ms in one tick,
+  -- with the name list rebuilt per page; now cached), so pages stay small; the service follows `next`.
+  PROTO_PAGE_BUDGET_BYTES = 12000,
   -- Largest "<sub> <json>" parameter string the dispatcher accepts (bytes).
   MAX_PARAM_BYTES = 1000,
   -- `area` answers at once up to this radius (tiles); larger areas must run as a tick-split job.
