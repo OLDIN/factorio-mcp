@@ -31,6 +31,7 @@ ALLOWED_SUBS: frozenset[str] = frozenset(
         "platforms",
         "inventory",
         "alerts",
+        "resources",
         "job_start",
         "job_result",
         "job_cancel",
