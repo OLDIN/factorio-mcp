@@ -40,24 +40,23 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         ToolSpec(
             "list_platforms",
             "platforms",
-            "Your force's space platforms: state, where each is or last was, speed, damaged tiles and the hub's "
-            "biggest stocks. Give name= for one platform. Empty without Space Age.",
+            "Your force's space platforms: state, where each is or last was, speed, damaged tiles, the hub's "
+            "biggest stocks. name= for one platform. Empty without Space Age.",
             list_platforms,
         ),
         ToolSpec(
             "list_trains",
             "trains",
             "Your force's trains: counts by state, then problem trains first (no path, destination full, no "
-            "schedule, manual with cargo, waiting at a station over 5 minutes) with station or target, cargo and "
-            "[gps]. Pages with offset/limit; problems_only=true lists only those.",
+            "schedule, manual with cargo, over 5 minutes at a station) with station or target, cargo and "
+            "[gps]. problems_only=true lists only those.",
             list_trains,
         ),
         ToolSpec(
             "logistic_networks",
             "logistics",
-            "Your force's logistic networks per surface: logistic and construction robots (available/total), "
-            "roboports, robots waiting to charge, and the biggest stocks; the busiest networks first. Give "
-            "name= to count one item across networks.",
+            "Your force's logistic networks per surface: robots available and total, roboports, robots "
+            "waiting to charge, the biggest stocks; the busiest first. name= counts one item across networks.",
             logistic_networks,
         )
     ]

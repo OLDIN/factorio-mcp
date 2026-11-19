@@ -102,8 +102,25 @@ def _wrap(spec: ToolSpec) -> Callable[..., Awaitable[Any]]:
     return run
 
 
+def _without_titles(schema: Any) -> Any:
+    """A JSON schema without its `title` strings: the SDK derives one per parameter from its name, and
+    tools/list is paid for in context on every conversation."""
+    if isinstance(schema, dict):
+        return {k: _without_titles(v) for k, v in schema.items() if not (k == "title" and isinstance(v, str))}
+    if isinstance(schema, list):
+        return [_without_titles(v) for v in schema]
+    return schema
+
+
+class _LeanServer(MCPServer):
+    """Lists tools with lean input schemas (no titles)."""
+
+    async def list_tools(self):  # type: ignore[override]
+        return [t.model_copy(update={"input_schema": _without_titles(t.input_schema)}) for t in await super().list_tools()]
+
+
 def create_app(settings: Settings, bridge: ModBridge, tokens: TokenStore) -> ASGIApp:
-    mcp = MCPServer("factorio-mcp", instructions=INSTRUCTIONS)
+    mcp = _LeanServer("factorio-mcp", instructions=INSTRUCTIONS)
     all_specs = [
         *server.specs(bridge),
         *players.specs(bridge),
@@ -127,7 +144,8 @@ def create_app(settings: Settings, bridge: ModBridge, tokens: TokenStore) -> ASG
             mcp.remove_tool(name)
         for name, spec in wanted.items():
             if name not in registered:
-                mcp.add_tool(_wrap(spec), name=name, description=spec.description)
+                # results are JSON text: no output schema and no duplicate structured copy of each answer
+                mcp.add_tool(_wrap(spec), name=name, description=spec.description, structured_output=False)
         registered.clear()
         registered.update(wanted)
 

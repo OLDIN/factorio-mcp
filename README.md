@@ -17,7 +17,7 @@ It has two parts:
 |---|---|
 | `server_status` | Mods and versions, tick, pause, difficulty and map settings |
 | `list_players` | Who is online or offline, positions of online players, play time |
-| `reference_recipes`, `reference_machines`, `reference_items`, `reference_fluids`, `reference_modules`, `reference_qualities`, `reference_technologies`, `reference_planets` | The game's own data for *your* mod set (modded planets included), cached per mod set |
+| `game_reference` | The game's own data for *your* mod set (modded planets included), cached per mod set (`kind`: recipes, machines, items, fluids, modules, qualities, technologies, planets) |
 | `inspect_area` | Machines and drills around a `[gps]` point, a player, or yourself: what works, what stands and why, what is stuck in inputs and outputs, drills running dry |
 | `base_machines_overview` | The same picture for the whole base, per surface and recipe |
 | `production_stats` | Items and fluids produced and consumed per minute (5 s to 10 h windows), top producers, consumers and deficits, one item per surface and quality |

@@ -41,9 +41,9 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         ToolSpec(
             "production_stats",
             "production",
-            "Items and fluids produced and consumed per minute by your force, averaged over a window "
-            "(5s, 1m, 10m, 1h, 10h): top produced, top consumed and the biggest deficits. Give name= for one "
-            "item or fluid per surface and quality, surface= to look at one surface only.",
+            "Items and fluids produced and consumed per minute by your force over a window (5s, 1m, 10m, 1h, "
+            "10h): top produced, top consumed, biggest deficits. name= gives one item or fluid per surface "
+            "and quality; surface= one surface only.",
             production_stats,
         )
     ]

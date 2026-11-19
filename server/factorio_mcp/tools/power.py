@@ -44,18 +44,16 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         ToolSpec(
             "inspect_power",
             "power",
-            "Electric networks around a point (radius up to 64, default 32): power produced and consumed now "
-            "(kW, last 5 s) with the biggest producers and consumers, accumulator charge, and machines short of "
-            "power. Give a [gps=x,y,surface] tag, or a player's name, or nothing to use your own position.",
+            "Electric networks around a point (radius up to 64): power produced and consumed now (kW), the "
+            "biggest producers and consumers, accumulators, and machines short of power.",
             inspect_power,
         ),
         ToolSpec(
             "base_power_overview",
             "power",  # the power_overview job kind ships with the power command (mod 0.4.0+)
-            "Every electric network of your force on the whole base, the ones with machines short of power "
-            "first: power produced and consumed now (kW), biggest producers and consumers, accumulators, a "
-            "[gps] of one pole. Lone idle poles are only counted. Scans in small steps over game ticks; if the "
-            "answer is status \"running\", call again with the returned job_id. Pages with offset/limit.",
+            "Every electric network of your force, those with machines short of power first: kW produced and "
+            "consumed, the biggest producers and consumers, accumulators, a pole's [gps]. Lone idle poles are "
+            "only counted.",
             base_power_overview,
         ),
     ]

@@ -21,8 +21,8 @@ async def _setup(stack):
         {"v": 1, "ok": True, "result": {"kind": "machines", "total": 1, "offset": 0, "items": MACHINES}})
 
 
-async def _call(stack, name, arguments):
-    r = await stack.rpc("tools/call", {"name": name, "arguments": arguments})
+async def _call(stack, kind, arguments):
+    r = await stack.rpc("tools/call", {"name": "game_reference", "arguments": {"kind": kind, **arguments}})
     assert r.status_code == 200, r.text
     return json.loads(r.json()["result"]["content"][0]["text"])
 
@@ -30,26 +30,36 @@ async def _call(stack, name, arguments):
 async def test_tools_listed_with_schema(stack):
     await _setup(stack)
     tools = {t["name"]: t for t in (await stack.rpc("tools/list")).json()["result"]["tools"]}
-    assert {"reference_recipes", "reference_machines", "reference_planets"} <= set(tools)
-    assert "produces" in tools["reference_recipes"]["inputSchema"]["properties"]
-    assert "reference_items" not in tools  # the mod does not know proto_items in this scenario
+    # one tool for every kind of game data (eight near-identical tools cost ~5 KB of context)
+    assert "game_reference" in tools and not [n for n in tools if n.startswith("reference_")]
+    props = tools["game_reference"]["inputSchema"]["properties"]
+    assert set(props["kind"]["enum"]) == {
+        "recipes", "machines", "items", "fluids", "modules", "qualities", "technologies", "planets"}
+    assert "produces" in props and "category" in props
+
+
+async def test_kind_the_mod_does_not_know(stack):
+    await _setup(stack)  # the mod does not know proto_items in this scenario
+    r = await stack.rpc("tools/call", {"name": "game_reference", "arguments": {"kind": "items"}})
+    result = r.json()["result"]
+    assert result["isError"] is True and "items" in result["content"][0]["text"]
 
 
 async def test_tool_limit_and_offset(stack):
     await _setup(stack)
-    page = await _call(stack, "reference_recipes", {"limit": 4, "offset": 0})
+    page = await _call(stack, "recipes", {"limit": 4, "offset": 0})
     assert page["total"] == 11 and len(page["items"]) == 4 and page["next"] == 4  # hidden one skipped
-    page = await _call(stack, "reference_recipes", {"limit": 4, "offset": 8})
+    page = await _call(stack, "recipes", {"limit": 4, "offset": 8})
     assert len(page["items"]) == 3 and page["next"] is None
 
 
 async def test_search_is_case_insensitive_and_filters(stack):
     await _setup(stack)
-    page = await _call(stack, "reference_recipes", {"search": "RECIPE-05"})
+    page = await _call(stack, "recipes", {"search": "RECIPE-05"})
     assert [i["name"] for i in page["items"]] == ["recipe-05"]
-    page = await _call(stack, "reference_recipes", {"produces": "thing-3"})
+    page = await _call(stack, "recipes", {"produces": "thing-3"})
     assert [i["name"] for i in page["items"]] == ["recipe-03"]
-    page = await _call(stack, "reference_recipes", {"machine": "assembling-machine-2", "limit": 200})
+    page = await _call(stack, "recipes", {"machine": "assembling-machine-2", "limit": 200})
     assert page["total"] == 11
-    page = await _call(stack, "reference_recipes", {"name": "recipe-00"})  # exact name finds hidden too
+    page = await _call(stack, "recipes", {"name": "recipe-00"})  # exact name finds hidden too
     assert page["total"] == 1

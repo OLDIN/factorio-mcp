@@ -72,12 +72,9 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         ToolSpec(
             "inspect_area",
             "area",
-            "Diagnose machines and mining drills around a point: how many work, how many stand and why "
-            "(status), which recipes, what is stuck in their inputs/outputs, drills about to run dry. "
-            "Give a [gps=x,y,surface] tag, or a player's name, or nothing to use your own position. "
-            "Only production machines are read, never vehicles, corpses or inventories of players. "
-            "Radii above 64 tiles are scanned in small steps over several game ticks; if the answer is "
-            "status \"running\", call the tool again with the returned job_id.",
+            "Machines and drills around a point: how many work, why the rest stand, recipes, what is stuck in "
+            "inputs and outputs, drills about to run dry. Production machines only, never vehicles, corpses "
+            "or players' inventories. A radius over 64 runs as a job.",
             inspect_area,
         )
     ]
