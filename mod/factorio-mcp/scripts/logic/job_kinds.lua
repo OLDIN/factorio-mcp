@@ -11,7 +11,7 @@ local power_overview = require("scripts.logic.power_overview")
 local threats_logic = require("scripts.logic.threats_logic")
 local defenses_scan = require("scripts.logic.defenses_scan")
 local resources_logic = require("scripts.logic.resources_logic")
-local bounds = require("scripts.logic.chunk_bounds")
+local chunk_blocks = require("scripts.logic.chunk_blocks")
 local engine = require("scripts.logic.job_engine")
 local limits = require("scripts.limits")
 
@@ -49,14 +49,10 @@ local function sorted_surface_names()
   return names
 end
 
--- bounding box of a surface's generated chunks, or nil when it has none. Kept up to date in storage by
--- on_chunk_generated (scripts/bounds.lua), so planning a job costs no pass over every chunk (that pass
--- took ~25 ms in one tick on a real map); a surface not known yet is walked once and remembered.
-local function chunk_bounds(surface)
-  local b = bounds.cached(surface)
-  if not b then b = bounds.remember(surface, bounds.walk(surface)) end
-  if not b then return nil end
-  return b.minx, b.miny, b.maxx, b.maxy
+-- The 512-tile blocks of a surface that hold generated chunks (see chunk_blocks: kept in storage by
+-- on_chunk_generated); a surface not known yet is walked once and remembered.
+local function occupied_blocks(surface)
+  return chunk_blocks.cached(surface) or chunk_blocks.remember(surface, chunk_blocks.walk(surface))
 end
 
 -- Surfaces to scan (all, or the listed ones each once) and their first-level blocks.
@@ -82,13 +78,12 @@ local function plan_surfaces(params)
   for index, name in ipairs(names) do
     local surface = game.get_surface(name)
     if surface then
-      local minx, miny, maxx, maxy = chunk_bounds(surface)
-      if minx then
-        covered = covered + (maxx - minx + 1) * (maxy - miny + 1)
-        if covered > limits.MAX_JOB_CHUNKS then
-          bad("map too large for one job (limit " .. limits.MAX_JOB_CHUNKS .. " chunks): ask for fewer surfaces")
+      for _, b in ipairs(chunk_blocks.sorted(occupied_blocks(surface))) do
+        covered = covered + 1
+        if covered > limits.MAX_JOB_BLOCKS then
+          bad("map too large for one job (limit " .. limits.MAX_JOB_BLOCKS .. " blocks of 512x512 tiles): ask for fewer surfaces")
         end
-        add_blocks(work, index, minx, miny, maxx, maxy)
+        work[#work + 1], work[#work + 2], work[#work + 3], work[#work + 4] = index, b.bx * BLOCK, b.by * BLOCK, BLOCK
       end
     end
   end

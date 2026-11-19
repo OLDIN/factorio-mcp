@@ -13,9 +13,9 @@ return {
   MAX_SYNC_AREA_RADIUS = 64,
   -- Sanity bound for a tick-split `area` job (cost grows with the area, spread over ticks).
   MAX_JOB_AREA_RADIUS = 1000,
-  -- A whole-map job covers the bounding box of a surface's generated chunks; bound its size (in
-  -- chunks) and how many jobs run at once.
-  MAX_JOB_CHUNKS = 250000,
+  -- A whole-map job visits the 512-tile blocks that hold generated chunks; bound their number (4,000
+  -- blocks = about a million chunks of explored map) and how many jobs run at once.
+  MAX_JOB_BLOCKS = 4000,
   MAX_RUNNING_JOBS = 4,
   -- `resources`: radius bound, and the most resource tiles read in one tick; above it the service
   -- runs job kind `resources` (measured ~1.5-2.2 us per tile read, so this stays around 2 ms).

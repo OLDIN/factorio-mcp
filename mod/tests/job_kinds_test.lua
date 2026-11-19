@@ -123,13 +123,21 @@ local once = kinds.plan("machines_overview", { surfaces = { "nauvis" } })
 local many = kinds.plan("machines_overview", { surfaces = { "nauvis", "nauvis", "nauvis", "nauvis" } })
 assert(#many.work == #once.work and #many.surfaces == 1)
 
--- a map larger than the limit is refused
+-- a map with more occupied blocks than the limit is refused
 local limits = require("scripts.limits")
-local saved = limits.MAX_JOB_CHUNKS
-limits.MAX_JOB_CHUNKS = 2
+local saved = limits.MAX_JOB_BLOCKS
+limits.MAX_JOB_BLOCKS = 0
 local ok, err = pcall(kinds.plan, "machines_overview", {})
-limits.MAX_JOB_CHUNKS = saved
+limits.MAX_JOB_BLOCKS = saved
 assert(not ok and err.code == "bad_params", "the size limit must be enforced")
+
+-- a far-away chunk adds one block, not the bounding box between it and the base: the job visits only
+-- blocks that hold chunks and still finds every machine
+local far_entities = { machine("asm", 5, 5, 1, "gear"), machine("asm", 320005, 320005, 2, "gear") }
+local far = make_surface(far_entities, { { x = 0, y = 0 }, { x = 1, y = 0 }, { x = 10000, y = 10000 } })
+local far_page, far_plan = run("machines_overview", {}, far)
+assert(far_plan.initial_items == 2, "two occupied blocks, got " .. far_plan.initial_items)
+assert(far_page.summary.machines == 2, "both machines found")
 
 -- power_overview: the caller's force is resolved at planning; other forces' poles are not read
 _G.defines.flow_precision_index = { five_seconds = 0 }
@@ -236,14 +244,15 @@ for _, bad in ipairs({
   assert(not ok and type(err) == "table" and err.code, "expected a coded error for " .. bad[1])
 end
 
--- planning takes the chunk bounds from storage when they are known: no walk over every chunk
+-- planning takes the occupied blocks from storage when they are known: no walk over every chunk
+local chunk_blocks = require("scripts.logic.chunk_blocks")
 local walked = false
 local known = make_surface(entities, { { x = 0, y = 0 } })
 known.index = 1
 known.get_chunks = function() walked = true; return function() return nil end end
-_G.storage = { mcp_bounds = { [1] = { minx = 0, miny = 0, maxx = 1, maxy = 1 } } }
+_G.storage = { mcp_blocks = { [1] = { [chunk_blocks.key(0, 0)] = true } } }
 local _, kplan = run("machines_overview", {}, known)
-assert(not walked and kplan.initial_items == 1, "bounds from storage, one block")
+assert(not walked and kplan.initial_items == 1, "blocks from storage, one block")
 _G.storage = {}
 
 print("job_kinds_test ok")

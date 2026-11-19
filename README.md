@@ -44,7 +44,7 @@ Large queries (big areas, the whole base) are split over many game ticks, so pla
 - **Read-only by construction.** There is no tool for arbitrary commands, Lua, files, shell, pause,
   speed or saving. A leaked token can only read.
 - **Nothing is written** on the server or on players' computers, and while idle the mod only keeps
-  the bounding box of generated chunks up to date (a few comparisons per new chunk).
+  a list of the map blocks that hold generated chunks up to date (one table write per new chunk).
 - **One token per person**, revocable on its own (the token file holds only SHA-256 hashes and is
   re-read on change). Every call is logged: who, which tool, how long; never the arguments.
 - **Privacy.** Positions of all players are visible; an inventory only for the person asking (the
