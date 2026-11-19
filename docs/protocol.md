@@ -20,7 +20,8 @@ The reply is a single line of JSON printed with `rcon.print`:
 - Factorio encodes an empty Lua table as `{}`, even where the field is a list. The service
   normalizes known list and map fields.
 - The mod never changes the world, never writes files and does nothing in the background except
-  an `on_tick` handler while a tick-split job is running.
+  an `on_tick` handler while a tick-split job is running, and an `on_chunk_generated` handler that
+  widens the stored bounding box of the surface's generated chunks (a few comparisons per new chunk).
 
 ## Error codes
 
@@ -47,6 +48,10 @@ Commands added in 0.4.0 take `caller`: the nick from the service's token. They r
 | `logistics` | `{caller, surface?, name?, limit?}` (`limit` 1..50, default 15) | the caller's force's logistic networks: `{networks: [{surface, id, gps?, roboports, charging, logistic_robots: {available, total}, construction_robots: {available, total}, top_contents: [{name, quality, count}]}] (20 at most, least available logistic robots first), total}`; with `name`: `{name, total, by_network: [{surface, id, count}]}` (qualities summed) |
 | `trains` | `{caller, surface?, problems_only?, offset?, limit?}` (`limit` 1..50, default 15) | the caller's force's trains: `{by_state: {state: n}, total, problems_total, trains: [{id, group?, state, surface, gps, station?, target?, waiting_ticks, cargo: [{name, count}] (top 5, qualities summed), fluids: [{name, amount}], problem?}], next?}`; problems (`no_path`, `destination_full`, `no_schedule`, `manual_with_cargo`, `long_wait` = over 5 minutes at a station) first; only schedule getters are used, passengers are not read |
 | `platforms` | `{caller, name?, limit?}` (`limit` 1..50 hub stocks, default 10) | the caller's force's space platforms: `{platforms: [{name, state, location?, last_location?, speed, distance, damaged_tiles, hub_contents: [{name, quality, count}]}], total}`; empty without Space Age; unknown `name` → `not_found` |
+| `inventory` | `{caller}` only (no other player can be named) | the caller's own inventory: `{online, readable: true, main: [{name, quality, count}] (largest stacks first), armor: {name, equipment: [{name, count}]} or absent, guns: [name], ammo: [{name, quality, count}], crafting_queue_size}`; `{online: false, readable: false}` whenever the caller is offline (Factorio 2.1 keeps no readable inventory for an offline player; checked live) |
+| `alerts` | `{caller, limit?}` (`limit` 1..20 examples per type, default 5) | the caller's own alerts (`player.get_alerts{}`): `{online, by_type: [{type, count, examples: [{name, gps}]}]}`, `type` from `defines.alert_type` |
+| `resources` | `{caller, player}` or `{caller, surface, x, y}`; `radius?` (default 64, at most 128), `limit?` (1..30, default 10) | resource entities in the radius, grouped into patches (same resource in touching chunks, 8 neighbours): `{center, radius, patches: [{name, amount, tiles or wells, gps (centre), fluid}] (most tiles or wells first), patches_total}`; fluid resources (crude oil, ...) give the raw entity amount summed and `wells` instead of `tiles`. The tiles are counted first: above 1,000 nothing is read and the answer is `{job_needed: true, center, radius}`, then job kind `resources` gives the same answer over several ticks |
+| `transport` | `{caller, player}` or `{caller, surface, x, y}`; `radius?` (default 16, at most 32), `limit?` (1..30, default 15) | the caller's force's belts, loaders, inserters, pipes, pumps and tanks (own allowlist: no vehicles, characters or wagons): `{center, radius, counts: {name: n}, inserters: {by_status: {status: n}, stuck: [{name, gps, status}] (no_power, low_power, waiting_for_space_in_destination, waiting_for_source_items, in that order), stuck_total}, belts: {items: [{name, count}] (top 10, qualities summed), read, total} (contents of at most 100 belts are read), fluids: [{name, amount}] (each pipe's, pump's and tank's own share of its fluid segment, summed by fluid: nothing is counted twice)}`. Above 600 entities in the circle the counts come per name from `count_entities_filtered` and at most 300 inserters, 100 belts and 300 fluid boxes are read: the answer adds `sampled: true`, `inserters.read` and `inserters.total` |
 | `job_start` | `{kind, params?, mode?}` | `{job_id, mode, work_items}` |
 | `job_result` | `{job_id, offset?, limit?}` | `{state: "running", mode, progress}`, `{state: "cancelled"}`, or `{state: "done", ...result fields, next?}` |
 | `job_cancel` | `{job_id}` | `{cancelled}` |
@@ -68,13 +73,17 @@ vehicles (also modded ones) and containers are never queried, so their contents 
 Large queries run as jobs spread over game ticks so players do not feel them.
 
 - `job_start` kind `threats` (`params: {caller, surface, x, y, radius (at most 1000), limit?}`, mod 0.4.0+): the `threats` answer for radii above 256.
+- `job_start` kind `resources` (`params: {caller, surface, x, y, radius (at most 128), limit?}`, mod 0.4.0+): the `resources` answer when the command says `job_needed`.
+- `job_start` kind `resources_overview` (`params: {caller, surfaces?}`, mod 0.4.0+): resources left per surface; result `{summary: {surfaces, resources}, resources: [{surface, name, amount, tiles or wells, fluid}]}`, ores before fluids, most first.
 - `job_start` kind `defenses_overview` (`params: {caller, surfaces?, max_listed? (1..200, default 50)}`, mod 0.4.0+): the `defenses` scan of the caller's force over whole surfaces; result `{summary, by_surface: {surface: {total, problems}}, groups, problems_total, problems: [{..., surface, gps}]}`, worst first.
 - `job_start` kind `power_overview` (`params: {caller, surfaces?}`, mod 0.4.0+): every electric network of the caller's force; result `{summary: {networks, starved_networks, tiny}, networks: [{id, surface, poles, gps, produced_kw, consumed_kw, top_producers, top_consumers, starved, accumulators}]}`, most starved first; networks under 3 poles with nothing consuming are only counted in `tiny`.
 - `job_start` kinds: `machines_overview` (`params: {surfaces?: [name]}`, the whole map) and `area`
   (`params: {surface, x, y, radius, max_listed?}`, radius up to 1000).
 - **Method.** The map is cut into 512-tile blocks. A block's allowlisted entities are counted (cheap);
   an empty block is skipped, a crowded one (more than 40 entities) is split into four quarters, and
-  entities are read only from small areas. An entity belongs to the area its position lies in, so it
+  entities are read only from small areas. Counting stops just past the split threshold (counting a
+  block of 65k ore tiles in full took ~2.4 ms). Resource kinds split at 300 tiles down to 16-tile areas,
+  since an ore field holds ~1000 tiles per chunk. An entity belongs to the area its position lies in, so it
   is read once. Empty map costs almost nothing: a whole base takes seconds, not minutes.
 - **Budget.** Work is measured in units of about 10 microseconds (counting an area costs about as
   much as the chunks in it, reading an entity costs a few units). `mode: ticks` spends
@@ -84,6 +93,8 @@ Large queries run as jobs spread over game ticks so players do not feel them.
 - Poll `job_result` until `state` is `done`; `progress` is the share of the map area finished.
   Results are paged with `offset` and `next`; the job is removed after its last page. Unfetched
   results expire after 36,000 ticks; at most 8 are kept, at most 4 jobs run at once, and a surface
-  whose generated chunks span more than 250,000 chunks is refused.
+  whose generated chunks span more than 250,000 chunks is refused. The span comes from
+  `storage.mcp_bounds`, kept by `on_chunk_generated` and filled once at load time, so starting a job
+  never walks every chunk (that walk took ~25 ms in one tick on a real map).
 - Job state lives in `storage` as plain data, so a save made mid-job resumes after loading. Jobs
   saved by an older mod version are migrated (a running one is cancelled).

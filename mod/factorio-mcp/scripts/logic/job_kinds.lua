@@ -10,6 +10,8 @@ local caller = require("scripts.logic.caller")
 local power_overview = require("scripts.logic.power_overview")
 local threats_logic = require("scripts.logic.threats_logic")
 local defenses_scan = require("scripts.logic.defenses_scan")
+local resources_logic = require("scripts.logic.resources_logic")
+local bounds = require("scripts.logic.chunk_bounds")
 local engine = require("scripts.logic.job_engine")
 local limits = require("scripts.limits")
 
@@ -47,19 +49,14 @@ local function sorted_surface_names()
   return names
 end
 
--- bounding box of a surface's generated chunks, or nil when it has none
+-- bounding box of a surface's generated chunks, or nil when it has none. Kept up to date in storage by
+-- on_chunk_generated (scripts/bounds.lua), so planning a job costs no pass over every chunk (that pass
+-- took ~25 ms in one tick on a real map); a surface not known yet is walked once and remembered.
 local function chunk_bounds(surface)
-  local minx, miny, maxx, maxy
-  for chunk in surface.get_chunks() do
-    local x, y = chunk.x, chunk.y
-    if not minx then
-      minx, miny, maxx, maxy = x, y, x, y
-    else
-      if x < minx then minx = x elseif x > maxx then maxx = x end
-      if y < miny then miny = y elseif y > maxy then maxy = y end
-    end
-  end
-  return minx, miny, maxx, maxy
+  local b = bounds.cached(surface)
+  if not b then b = bounds.remember(surface, bounds.walk(surface)) end
+  if not b then return nil end
+  return b.minx, b.miny, b.maxx, b.maxy
 end
 
 -- Surfaces to scan (all, or the listed ones each once) and their first-level blocks.
@@ -176,6 +173,30 @@ local function plan_threats(params)
   }
 end
 
+local function plan_resources(params)
+  caller.player(params) -- a known caller only
+  if type(params.surface) ~= "string" then bad("surface is required") end
+  if not game.get_surface(params.surface) then not_found("no such surface") end
+  local x, y, radius = number(params, "x"), number(params, "y"), number(params, "radius")
+  if radius <= 0 or radius > limits.MAX_RESOURCES_RADIUS then
+    bad("radius must be above 0 and at most " .. limits.MAX_RESOURCES_RADIUS)
+  end
+  local limit = params.limit or 10
+  if type(limit) ~= "number" or limit < 1 or limit > 30 or limit ~= math.floor(limit) then
+    bad("limit must be an integer between 1 and 30")
+  end
+  return {
+    surfaces = { params.surface }, work = circle_blocks(x, y, radius), acc = resources_logic.new_acc(),
+    params = { surface = params.surface, x = x, y = y, radius = radius, limit = limit },
+  }
+end
+
+local function plan_resources_overview(params)
+  caller.player(params) -- a known caller only
+  local names, work = plan_surfaces(params)
+  return { surfaces = names, work = work, acc = { totals = {} } }
+end
+
 local function plan_defenses_overview(params)
   local force = caller.force(params)
   local names, work = plan_surfaces(params)
@@ -188,7 +209,7 @@ end
 
 local planners = {
   machines_overview = plan_overview, area = plan_area, power_overview = plan_power_overview, threats = plan_threats,
-  defenses_overview = plan_defenses_overview,
+  defenses_overview = plan_defenses_overview, resources = plan_resources, resources_overview = plan_resources_overview,
 }
 
 function M.known(kind)
@@ -205,19 +226,25 @@ end
 -- Work one square area. `take(job, entity)` handles an entity found in it. Returns cost, split.
 -- An entity belongs to the area its position lies in (half-open square), so it is read once even
 -- when its collision box touches a neighbour.
--- `filter` holds the allowlisted `type` list and, optionally, a `force` name.
+-- `filter` holds the allowlisted `type` list and, optionally, a `force` name, and for kinds whose
+-- entities are cheaper or far more numerous than machines: `entity_cost` (work units per entity read),
+-- `split_count` (split above this many) and `min_size` (smallest area, tiles).
 local function scan_area(job, si, x0, y0, size, take, filter)
   local surface = game.get_surface(job.surfaces[si])
   if not surface or not surface.valid then return 1, false end
-  local query = { area = { { x0, y0 }, { x0 + size, y0 + size } }, type = filter.type, force = filter.force }
+  local area = { { x0, y0 }, { x0 + size, y0 + size } }
   local cost = COUNT_COST[size] or 1
-  local count = surface.count_entities_filtered(query)
+  local split_count = filter.split_count or SPLIT_COUNT
+  -- only "none / few / too many" matters: counting stops just past the split threshold (a full count
+  -- of a block holding 65k ore tiles took ~2.4 ms in one tick)
+  local count = surface.count_entities_filtered({ area = area, type = filter.type, force = filter.force,
+    limit = split_count + 1 })
   if count == 0 then return cost, false end
-  if count > SPLIT_COUNT and size > engine.TILE then
+  if count > split_count and size > (filter.min_size or engine.TILE) then
     engine.split(job, si, x0, y0, size)
     return cost, true
   end
-  local found = surface.find_entities_filtered(query)
+  local found = surface.find_entities_filtered({ area = area, type = filter.type, force = filter.force })
   local x1, y1 = x0 + size, y0 + size
   for _, entity in ipairs(found) do
     if entity.valid then
@@ -225,7 +252,7 @@ local function scan_area(job, si, x0, y0, size, take, filter)
       if pos.x >= x0 and pos.x < x1 and pos.y >= y0 and pos.y < y1 then take(job, entity) end
     end
   end
-  return cost + 1 + #found * ENTITY_COST, false
+  return cost + 1 + #found * (filter.entity_cost or ENTITY_COST), false
 end
 
 local EXAMPLES = 3
@@ -354,8 +381,84 @@ function defenses.finish(job)
   }
 end
 
+-- Resource tiles: reading one (name, position, amount) and adding it to its chunk costs ~2 us, a
+-- fraction of a machine; a rich patch has ~1000 per chunk, so areas are cut down to 16 tiles and hold
+-- at most a few hundred: one area stays well under a millisecond.
+local RESOURCES = { type = { "resource" }, entity_cost = 0.25, split_count = 300, min_size = 16 }
+
+local function fluid_of(acc, entity)
+  local name = entity.name
+  local fluid = acc.fluid[name]
+  if fluid == nil then fluid = resources_logic.is_fluid(entity.prototype) end
+  return name, fluid
+end
+
+local resources = {}
+
+function resources.work(job, si, x0, y0, size)
+  local p = job.params
+  return scan_area(job, si, x0, y0, size, function(j, entity)
+    local pos = entity.position
+    if (pos.x - p.x) ^ 2 + (pos.y - p.y) ^ 2 <= p.radius ^ 2 then
+      local name, fluid = fluid_of(j.acc, entity)
+      resources_logic.add(j.acc, name, pos.x, pos.y, entity.amount, fluid)
+    end
+  end, RESOURCES)
+end
+
+function resources.finish(job)
+  local p = job.params
+  local all = resources_logic.finish(job.acc, p.surface)
+  local patches = {}
+  for i = 1, math.min(p.limit, #all) do patches[i] = all[i] end
+  return { fields = {
+    center = { surface = p.surface, x = p.x, y = p.y }, radius = p.radius, patches = patches, patches_total = #all,
+  } }
+end
+
+local resources_overview = {}
+
+function resources_overview.work(job, si, x0, y0, size)
+  local surface_name = job.surfaces[si]
+  return scan_area(job, si, x0, y0, size, function(j, entity)
+    local by_name = j.acc.totals[surface_name]
+    if not by_name then
+      by_name = {}
+      j.acc.totals[surface_name] = by_name
+    end
+    local name = entity.name
+    local t = by_name[name]
+    if not t then
+      t = { amount = 0, n = 0, fluid = resources_logic.is_fluid(entity.prototype) }
+      by_name[name] = t
+    end
+    t.amount = t.amount + entity.amount
+    t.n = t.n + 1
+  end, RESOURCES)
+end
+
+function resources_overview.finish(job)
+  local list = {}
+  for surface_name, by_name in pairs(job.acc.totals) do
+    for name, t in pairs(by_name) do
+      local item = { surface = surface_name, name = name, amount = t.amount, fluid = t.fluid }
+      if t.fluid then item.wells = t.n else item.tiles = t.n end
+      list[#list + 1] = item
+    end
+  end
+  table.sort(list, function(a, b)
+    if a.surface ~= b.surface then return a.surface < b.surface end
+    -- ores before fluids: a fluid's raw amount is in other units
+    if a.fluid ~= b.fluid then return not a.fluid end
+    if a.amount ~= b.amount then return a.amount > b.amount end
+    return a.name < b.name
+  end)
+  return { fields = { summary = { surfaces = #job.surfaces, resources = #list } }, list_name = "resources", list = list }
+end
+
 local steppers = {
   machines_overview = overview, area = area, power_overview = power, threats = threats, defenses_overview = defenses,
+  resources = resources, resources_overview = resources_overview,
 }
 
 function M.stepper(kind)
