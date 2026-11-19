@@ -44,6 +44,17 @@ function M.ok(result)
   return helpers.table_to_json({ v = M.PROTOCOL, ok = true, result = M.sanitize(result or {}) })
 end
 
+-- The JSON of a result, sanitized: a handler that must check its reply size encodes once with this
+-- and returns the string as its second value, so the reply is not encoded again (~0.07 ms per KB).
+function M.encode_result(result)
+  return helpers.table_to_json(M.sanitize(result or {}))
+end
+
+-- Wrap a result encoded by encode_result.
+function M.ok_encoded(json)
+  return '{"v":' .. M.PROTOCOL .. ',"ok":true,"result":' .. json .. '}'
+end
+
 function M.err(code, message)
   message = tostring(message or ""):gsub("[%c]+", " "):sub(1, 200)
   return helpers.table_to_json({ v = M.PROTOCOL, ok = false, error = { code = code, message = message } })

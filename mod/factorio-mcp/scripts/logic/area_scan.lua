@@ -10,16 +10,10 @@ M.AREA_TYPES = {
   "assembling-machine", "furnace", "lab", "mining-drill", "rocket-silo", "agricultural-tower",
 }
 
-local function read(obj, field)
-  local ok, value = pcall(function() return obj[field] end)
-  if ok then return value end
-  return nil
-end
-
 -- {name = count} for an inventory (qualities summed), or nil when empty/absent
 local function contents(inventory)
-  if not inventory then return nil end
-  local ok, list = pcall(function() return inventory.get_contents() end)
+  if not inventory or not inventory.valid then return nil end
+  local ok, list = pcall(inventory.get_contents)
   if not ok or type(list) ~= "table" then return nil end
   local out, any = {}, false
   for _, entry in ipairs(list) do
@@ -30,18 +24,22 @@ local function contents(inventory)
   return nil
 end
 
-local function inventory(entity, which)
-  local id = defines.inventory[which]
-  if id == nil then return nil end
-  local ok, inv = pcall(function() return entity.get_inventory(id) end)
-  if ok then return inv end
-  return nil
-end
+-- The inventories each machine type has (asking for others only costs time: ~50 machines are
+-- enriched per answer).
+local CRAFTER = { inputs = { "crafter_input", "fuel" }, outputs = { "crafter_output" }, progress = true }
+local INVENTORIES = {
+  ["assembling-machine"] = CRAFTER, ["furnace"] = CRAFTER, ["rocket-silo"] = CRAFTER,
+  ["lab"] = { inputs = { "lab_input" }, outputs = {} },
+  ["agricultural-tower"] = { inputs = { "agricultural_tower_input" }, outputs = { "agricultural_tower_output" } },
+}
 
 local function merged(entity, names)
   local out, any = {}, false
   for _, which in ipairs(names) do
-    local c = contents(inventory(entity, which))
+    local id = defines.inventory[which]
+    local ok, inv = false, nil
+    if id ~= nil then ok, inv = pcall(entity.get_inventory, id) end
+    local c = ok and contents(inv) or nil
     if c then
       for name, count in pairs(c) do out[name] = (out[name] or 0) + count end
       any = true
@@ -51,17 +49,17 @@ local function merged(entity, names)
   return nil
 end
 
-local INPUTS = { "crafter_input", "lab_input", "agricultural_tower_input", "fuel" }
-local OUTPUTS = { "crafter_output", "agricultural_tower_output" }
-
 local function enrich_entity(record, entity)
-  if entity and record.type ~= "mining-drill" then
-    record.crafting_progress = read(entity, "crafting_progress")
-    local ok, modules = pcall(function() return entity.get_module_inventory() end)
-    record.modules = ok and contents(modules) or nil
-    record.input = merged(entity, INPUTS)
-    record.output = merged(entity, OUTPUTS)
+  local kinds = entity and INVENTORIES[record.type]
+  if not kinds then return record end
+  if kinds.progress then
+    local ok, progress = pcall(function() return entity.crafting_progress end)
+    if ok then record.crafting_progress = progress end
   end
+  local ok, modules = pcall(entity.get_module_inventory)
+  record.modules = ok and contents(modules) or nil
+  record.input = merged(entity, kinds.inputs)
+  record.output = merged(entity, kinds.outputs)
   return record
 end
 
@@ -105,8 +103,9 @@ function M.enricher_by_position(surface)
   end
 end
 
--- surface: LuaSurface-like; center: {x, y}
-function M.scan(surface, center, radius, max_listed, budget_bytes)
+-- surface: LuaSurface-like; center: {x, y}; extra: fields added to the result inside the budget.
+-- Returns the result and its encoding (see area_group.finish).
+function M.scan(surface, center, radius, max_listed, budget_bytes, extra)
   local entities = surface.find_entities_filtered({
     position = { x = center.x, y = center.y }, radius = radius, type = M.AREA_TYPES,
   })
@@ -121,7 +120,7 @@ function M.scan(surface, center, radius, max_listed, budget_bytes)
   end
   return area_group.finish(acc, budget_bytes, function(record)
     return enrich_entity(record, entity_of[record])
-  end)
+  end, extra)
 end
 
 return M

@@ -90,6 +90,12 @@ run("nan {}")
 r = reply()
 assert(r.ok == true and r.result.x == nil and r.result.y == 1)
 
+-- a handler may return the encoded result as a second value: the reply uses it as is
+dispatcher.register("pre", function() return { x = 1 }, '{"x":2}' end)
+run("pre {}")
+r = reply()
+assert(r.ok == true and r.result.x == 2, "the pre-encoded result is the reply")
+
 -- names are sorted
 dispatcher.register("alpha", function() return {} end)
 local names = dispatcher.names()

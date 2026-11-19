@@ -31,6 +31,14 @@ for i = 1, 200 do many[i] = rec("asm", "no_ingredients", i) end
 res = area_group.build(many, 200, 3000)
 assert(#helpers.table_to_json(res) <= 3000 and res.truncated == true and res.totals.machines == 200)
 
+-- finish also returns the encoded result (the budget check's encoding, reused for the reply), with the
+-- caller's extra fields inside both
+local acc2 = area_group.new(200)
+for _, r in ipairs(many) do area_group.add(acc2, r) end
+local fin, encoded = area_group.finish(acc2, 3000, nil, { center = { surface = "nauvis", x = 1, y = 2 }, radius = 5 })
+assert(fin.center.surface == "nauvis" and fin.radius == 5, "extra fields in the result")
+assert(type(encoded) == "string" and #encoded <= 3000 and #encoded == #helpers.table_to_json(fin), "encoded = result")
+
 -- drills: about-to-run-dry first; enrich only runs for listed records
 local enriched = 0
 local drills = {

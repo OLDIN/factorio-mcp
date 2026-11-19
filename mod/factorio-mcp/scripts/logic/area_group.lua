@@ -1,6 +1,8 @@
 -- Summary of machine/drill records: totals, groups, and the stopped / drill lists.
 -- A record is {name, type, x, y, dist, status (string), recipe?, crafting_progress?, resource?, remaining?}.
 -- The accumulator is plain data (it lives in `storage` while a tick-split job runs).
+local envelope = require("scripts.envelope")
+
 local M = {}
 
 local function bump(map, key)
@@ -69,7 +71,9 @@ function M.add(acc, r)
 end
 
 -- enrich(record) -> record: optional, called only on records that make it into a list.
-function M.finish(acc, budget_bytes, enrich)
+-- extra: optional fields added to the result (inside the budget). Returns the result and its
+-- encoding (envelope.encode_result), which a command can hand to the dispatcher as is.
+function M.finish(acc, budget_bytes, enrich, extra)
   local group_list = {}
   for _, g in pairs(acc.groups) do group_list[#group_list + 1] = g end
   table.sort(group_list, function(a, b)
@@ -96,8 +100,10 @@ function M.finish(acc, budget_bytes, enrich)
     totals = acc.totals, groups = group_list,
     stopped = listed_stopped, drills = listed_drills, truncated = truncated,
   }
+  for k, v in pairs(extra or {}) do result[k] = v end
   -- fit the budget: drop from the longer list's tail until the encoded reply fits
-  while #helpers.table_to_json(result) > budget_bytes and (#listed_stopped + #listed_drills + #group_list) > 0 do
+  local encoded = envelope.encode_result(result)
+  while #encoded > budget_bytes and (#listed_stopped + #listed_drills + #group_list) > 0 do
     truncated = true
     if #listed_stopped >= #listed_drills and #listed_stopped > 0 then
       listed_stopped[#listed_stopped] = nil
@@ -106,9 +112,11 @@ function M.finish(acc, budget_bytes, enrich)
     else
       group_list[#group_list] = nil
     end
+    result.truncated = truncated
+    encoded = envelope.encode_result(result)
   end
   result.truncated = truncated
-  return result
+  return result, encoded
 end
 
 function M.build(records, max_listed, budget_bytes, enrich)

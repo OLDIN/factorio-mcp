@@ -17,8 +17,7 @@ dispatcher.register("area", function(params)
     error({ code = "bad_params", message = "max_listed must be a positive integer" })
   end
   local surface, center = caller.center(params)
-  local result = area_scan.scan(surface, center, radius, max_listed, limits.RESPONSE_BUDGET_BYTES - 500)
-  result.center = { surface = surface.name, x = center.x, y = center.y }
-  result.radius = radius
-  return result
+  -- the result comes back encoded too (the budget check's encoding): the reply is not encoded twice
+  return area_scan.scan(surface, center, radius, max_listed, limits.RESPONSE_BUDGET_BYTES - 500,
+    { center = { surface = surface.name, x = center.x, y = center.y }, radius = radius })
 end)

@@ -257,5 +257,12 @@ within 64).
   | `resources_overview` | 14.0 s | 60.0 | 832 | 0.28 ms | 1.9 ms |
 
   `job_start` 0.14-0.31 ms for every kind.
-- **Left as they are** (under the 5 ms criterion, above the ~2 ms aim): `defenses` r=64 at a wall-heavy
-  spot 4.6 ms, `area` r=64 3.9 ms, the worst `defenses_overview` tick 3.0 ms.
+- **`defenses` and `area`, reworked afterwards.** `defenses` r=64 at the wall-heavy spot (1,397
+  walls, 68 laser turrets) took 5.3 ms: each wall cost ~4 us, a `pcall` closure per field read plus
+  the force and position of every wall. Now the force is filtered in the search (every force except
+  `enemy` and `neutral`, as before), one `pcall` covers a whole record, and the position is read only
+  for problems: **2.85 ms**. `area` r=64 with `max_listed` 50 took 3.5-3.7 ms: records 0.8 ms,
+  enriching 50 listed machines ~1 ms, and the 17.7 KB reply encoded twice (budget check, then the
+  envelope; ~1.2 ms each). Now the budget check's encoding is the reply (`envelope.encode_result` /
+  `ok_encoded`), and a machine is asked only for the inventories its type has: **2.7 ms** (1.65 ms
+  with the default 20, 0.8 ms at r=32). The worst `defenses_overview` tick went from 3.0 to 2.0 ms.
