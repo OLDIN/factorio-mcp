@@ -15,6 +15,7 @@ require("scripts.commands.power")
 require("scripts.commands.research")
 require("scripts.commands.threats")
 require("scripts.commands.pollution")
+require("scripts.commands.logistics")
 require("scripts.commands.job")
 
 commands.add_command(
