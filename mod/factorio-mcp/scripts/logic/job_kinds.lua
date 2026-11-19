@@ -10,6 +10,7 @@ local caller = require("scripts.logic.caller")
 local power_overview = require("scripts.logic.power_overview")
 local threats_logic = require("scripts.logic.threats_logic")
 local defenses_scan = require("scripts.logic.defenses_scan")
+local mining_logic = require("scripts.logic.mining_logic")
 local resources_logic = require("scripts.logic.resources_logic")
 local chunk_blocks = require("scripts.logic.chunk_blocks")
 local engine = require("scripts.logic.job_engine")
@@ -202,9 +203,20 @@ local function plan_defenses_overview(params)
   return { surfaces = names, work = work, acc = defenses_scan.new_acc(keep), params = { force = force.name } }
 end
 
+local function plan_mining_overview(params)
+  local force = caller.force(params)
+  local names, work = plan_surfaces(params)
+  local keep = params.limit or 25
+  if type(keep) ~= "number" or keep < 1 or keep > 100 or keep ~= math.floor(keep) then
+    bad("limit must be an integer between 1 and 100")
+  end
+  return { surfaces = names, work = work, acc = mining_logic.new_acc(keep), params = { force = force.name } }
+end
+
 local planners = {
   machines_overview = plan_overview, area = plan_area, power_overview = plan_power_overview, threats = plan_threats,
   defenses_overview = plan_defenses_overview, resources = plan_resources, resources_overview = plan_resources_overview,
+  mining_overview = plan_mining_overview,
 }
 
 function M.known(kind)
@@ -451,9 +463,31 @@ function resources_overview.finish(job)
   return { fields = { summary = { surfaces = #job.surfaces, resources = #list } }, list_name = "resources", list = list }
 end
 
+-- Mining drills: each one looks up the ore of its target resource inside its square mining area (a
+-- find per drill, a few times the cost of reading a machine), so areas are cut small.
+local DRILLS = { type = { "mining-drill" }, entity_cost = 8, split_count = 12, min_size = 8 }
+
+local mining = {}
+
+function mining.work(job, si, x0, y0, size)
+  local surface = game.get_surface(job.surfaces[si])
+  local surface_name = job.surfaces[si]
+  local filter = { type = DRILLS.type, entity_cost = DRILLS.entity_cost, split_count = DRILLS.split_count, min_size = DRILLS.min_size,
+    force = job.params.force }
+  return scan_area(job, si, x0, y0, size, function(j, entity)
+    local record = mining_logic.record(entity, surface)
+    if record then mining_logic.add(j.acc, record, surface_name) end
+  end, filter)
+end
+
+function mining.finish(job)
+  local out = mining_logic.finish(job.acc)
+  return { fields = { summary = out.summary, groups = out.groups }, list_name = "worst", list = out.worst }
+end
+
 local steppers = {
   machines_overview = overview, area = area, power_overview = power, threats = threats, defenses_overview = defenses,
-  resources = resources, resources_overview = resources_overview,
+  resources = resources, resources_overview = resources_overview, mining_overview = mining,
 }
 
 function M.stepper(kind)

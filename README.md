@@ -34,6 +34,7 @@ It has two parts:
 | `my_alerts` | Your own alerts only, by type, with counts and examples with `[gps]` |
 | `inspect_resources` | Resource patches around a point: amount, tiles (wells for oil), centre `[gps]` |
 | `base_resources_overview` | Resources left on every surface: amount and tiles (wells for oil) per resource |
+| `base_mining_overview` | Your mining drills on the whole base: depleted and running-low drills per surface and resource, the worst first with `[gps]` |
 | `inspect_transport` | Belts, inserters and pipes around a point: stuck inserters first, items on belts (a sample on a packed bus), fluids in pipes and tanks |
 | `inspect_defenses` | Turrets, walls, gates, mines and radars around a `[gps]` point, a player, or yourself: ammo and flamethrower fluid, power, damage, and the worst problems first (needs mod 0.3.0+) |
 
