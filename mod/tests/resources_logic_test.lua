@@ -44,6 +44,33 @@ assert(#o == 1 and o[1].fluid == true and o[1].wells == 2 and o[1].tiles == nil 
 
 assert(#resources_logic.patches({}, "nauvis") == 0)
 
+-- the accumulator (what the command and the job use): per-chunk sums while reading, no per-tile records,
+-- plain data only (it is kept in storage between ticks); same answer as patches(records)
+local acc = resources_logic.new_acc()
+for _, r in ipairs(join(apart, across, oil)) do resources_logic.add(acc, r.name, r.x, r.y, r.amount, r.fluid) end
+local via_acc = resources_logic.finish(acc, "nauvis")
+local via_records = resources_logic.patches(join(apart, across, oil), "nauvis")
+assert(#via_acc == #via_records and #via_acc == 3, "iron (apart and across merge) + oil")
+for i = 1, #via_acc do
+  for _, k in ipairs({ "name", "amount", "tiles", "wells", "gps", "fluid" }) do
+    assert(via_acc[i][k] == via_records[i][k], "field " .. k .. " of patch " .. i)
+  end
+end
+for _, chunks in pairs(acc.chunks) do
+  for key, c in pairs(chunks) do
+    assert(type(key) == "number" and type(c) == "table" and c.n > 0, "numeric chunk keys")
+  end
+end
+
+-- negative coordinates: chunks -1 and 0 touch, -2 and 0 do not
+local neg = resources_logic.new_acc()
+resources_logic.add(neg, "stone", -0.5, -0.5, 5, false)
+resources_logic.add(neg, "stone", 0.5, 0.5, 5, false)
+resources_logic.add(neg, "coal", -40.5, 3.5, 5, false)
+resources_logic.add(neg, "coal", 33.5, 3.5, 5, false)
+local np = resources_logic.finish(neg, "nauvis")
+assert(#np == 3 and np[1].name == "stone" and np[1].tiles == 2, "stone merges across 0, coal stays two")
+
 -- fluid detection from the prototype's first mining product
 assert(resources_logic.is_fluid({ mineable_properties = { products = { { type = "fluid", name = "crude-oil" } } } }))
 assert(not resources_logic.is_fluid({ mineable_properties = { products = { { type = "item", name = "iron-ore" } } } }))

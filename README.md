@@ -32,8 +32,9 @@ It has two parts:
 | `list_platforms` | Space platforms: state, location, speed, damage, hub stocks |
 | `my_inventory` | Your own inventory only: main inventory, armor and its equipment, guns, ammo, crafting queue (not readable while you are offline) |
 | `my_alerts` | Your own alerts only, by type, with counts and examples with `[gps]` |
-| `inspect_resources` | Resource patches around a point: amount, tiles (wells for oil), centre `[gps]`, and the surface totals |
-| `inspect_transport` | Belts, inserters and pipes around a point: stuck inserters first, items on belts, fluids in pipes and tanks |
+| `inspect_resources` | Resource patches around a point: amount, tiles (wells for oil), centre `[gps]` |
+| `base_resources_overview` | Resources left on every surface: amount and tiles (wells for oil) per resource |
+| `inspect_transport` | Belts, inserters and pipes around a point: stuck inserters first, items on belts (a sample on a packed bus), fluids in pipes and tanks |
 | `inspect_defenses` | Turrets, walls, gates, mines and radars around a `[gps]` point, a player, or yourself: ammo and flamethrower fluid, power, damage, and the worst problems first (needs mod 0.3.0+) |
 
 Large queries (big areas, the whole base) are split over many game ticks, so players do not feel them.
@@ -42,8 +43,8 @@ Large queries (big areas, the whole base) are split over many game ticks, so pla
 
 - **Read-only by construction.** There is no tool for arbitrary commands, Lua, files, shell, pause,
   speed or saving. A leaked token can only read.
-- **Nothing is written** on the server or on players' computers, and the mod does nothing in the
-  background while idle.
+- **Nothing is written** on the server or on players' computers, and while idle the mod only keeps
+  the bounding box of generated chunks up to date (a few comparisons per new chunk).
 - **One token per person**, revocable on its own (the token file holds only SHA-256 hashes and is
   re-read on change). Every call is logged: who, which tool, how long; never the arguments.
 - **Privacy.** Positions of all players are visible; an inventory only for the person asking (the

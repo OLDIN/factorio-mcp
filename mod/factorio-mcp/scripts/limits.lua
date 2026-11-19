@@ -14,4 +14,14 @@ return {
   -- chunks) and how many jobs run at once.
   MAX_JOB_CHUNKS = 250000,
   MAX_RUNNING_JOBS = 4,
+  -- `resources`: radius bound, and the most resource tiles read in one tick; above it the service
+  -- runs job kind `resources` (measured ~1.5-2.2 us per tile read, so this stays around 2 ms).
+  MAX_RESOURCES_RADIUS = 128,
+  SYNC_MAX_RESOURCE_TILES = 1000,
+  -- `transport`: belt contents are read from at most this many belts per call (~4 us each).
+  MAX_TRANSPORT_BELT_READS = 100,
+  -- `transport`: read every entity up to this many in the circle (~1-1.5 us each); above it counts come
+  -- per name and at most TRANSPORT_SAMPLE_READS inserters and fluid boxes are read.
+  TRANSPORT_FULL_READ_MAX = 600,
+  TRANSPORT_SAMPLE_READS = 300,
 }

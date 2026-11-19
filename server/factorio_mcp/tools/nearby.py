@@ -5,18 +5,63 @@ from __future__ import annotations
 from typing import Any
 
 from ..bridge import ModBridge, normalize_lists, normalize_maps
-from .common import call_mod, caller_args, point_args
+from ..jobs import JobRunner
+from .common import call_mod, caller_args, page, point_args, run_job
 from .registry import ToolSpec
+
+MAX_SURFACES = 32
 
 
 def specs(bridge: ModBridge) -> list[ToolSpec]:
+    runner = JobRunner(bridge)
+
     async def inspect_resources(
-        gps: str | None = None, player: str | None = None, radius: float = 64.0, limit: int = 10
+        gps: str | None = None,
+        player: str | None = None,
+        radius: float = 64.0,
+        limit: int = 10,
+        job_id: str | None = None,
     ) -> dict[str, Any]:
-        args = {**caller_args(), **point_args(gps, player), "radius": radius, "limit": limit}
+        if job_id is not None:  # continue a scan that was still running
+            result = await run_job(runner, "resources", {}, job_id)
+            return result if result.get("status") == "running" else normalize_lists(result, ["patches"])
+        point = point_args(gps, player)
+        args = {**caller_args(), **point, "radius": radius, "limit": limit}
         result = await call_mod(bridge, "resources", args)
-        normalize_lists(result, ["patches"])
-        return normalize_maps(result, ["surface_totals"])
+        if result.get("job_needed"):
+            # too many tiles to read in one tick: the same question as a job spread over ticks
+            center = result["center"]
+            params = {
+                **caller_args(),
+                "surface": center["surface"],
+                "x": center["x"],
+                "y": center["y"],
+                "radius": radius,
+                "limit": limit,
+            }
+            result = await run_job(runner, "resources", params, None)
+            if result.get("status") == "running":
+                return result
+        return normalize_lists(result, ["patches"])
+
+    async def base_resources_overview(
+        surfaces: list[str] | None = None, job_id: str | None = None, limit: int = 30, offset: int = 0
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = caller_args()
+        if surfaces is not None:
+            params["surfaces"] = list(dict.fromkeys(surfaces))[:MAX_SURFACES]  # each surface once
+        result = await run_job(runner, "resources_overview", params, job_id)
+        if result.get("status") == "running":
+            return result
+        normalize_lists(result, ["resources"])
+        listed, nxt = page(result.get("resources", []), limit, offset)
+        return {
+            "summary": result.get("summary", {}),
+            "resources": listed,
+            "total_resources": len(result.get("resources", [])),
+            "offset": max(0, offset),
+            "next": nxt,
+        }
 
     async def inspect_transport(
         gps: str | None = None, player: str | None = None, radius: float = 16.0, limit: int = 15
@@ -32,15 +77,26 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
             "resources",
             "Resource patches around a [gps] point, a player, or yourself (radius up to 128 tiles, default 64): "
             "each patch with its resource, amount, tiles (or wells for crude oil, raw amount), centre [gps], "
-            "most tiles first; plus the totals for the whole surface.",
+            'most tiles first. A rich area is read over several ticks: if the answer is status "running", '
+            "call again with the returned job_id. For what is left on whole surfaces use base_resources_overview.",
             inspect_resources,
+        ),
+        ToolSpec(
+            "base_resources_overview",
+            "resources",  # the resources_overview job kind ships with the resources command (mod 0.4.0+)
+            "Resources left on every surface (or the listed ones): per surface and resource the amount and "
+            "tiles (wells and raw amount for fluids like crude oil), ores first, most first. Scans the whole map "
+            'in small steps over game ticks, so players do not notice it; if the answer is status "running", '
+            "call again with the returned job_id. Pages with offset/limit.",
+            base_resources_overview,
         ),
         ToolSpec(
             "inspect_transport",
             "transport",
             "Belts, inserters and pipes of your force around a [gps] point, a player, or yourself (radius up to "
             "32 tiles, default 16): counts, inserters by status with the stuck ones first (no power, output "
-            "blocked, waiting for items) with [gps], the items on the belts, and the fluids in pipes and tanks.",
+            "blocked, waiting for items) with [gps], the items on the belts (read from at most 100 belts: "
+            "belts.read of belts.total), and the fluids in pipes and tanks.",
             inspect_transport,
         ),
     ]

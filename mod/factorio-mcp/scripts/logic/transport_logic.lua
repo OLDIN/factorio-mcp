@@ -14,16 +14,35 @@ M.FLUID_TYPES = { ["pipe"] = true, ["pipe-to-ground"] = true, ["pump"] = true, [
 -- the worst first; an inserter in any of these is "stuck"
 local STUCK = { no_power = 1, low_power = 2, waiting_for_space_in_destination = 3, waiting_for_source_items = 4 }
 
-function M.new_acc(limit)
-  return { limit = limit, counts = {}, by_status = {}, stuck = {}, stuck_total = 0, items = {}, fluids = {} }
+-- max_belt_reads: belt contents are read from at most this many belts (default 100, limits.lua)
+function M.new_acc(limit, max_belt_reads)
+  return { limit = limit, counts = {}, by_status = {}, stuck = {}, stuck_total = 0, items = {}, fluids = {},
+    max_belt_reads = max_belt_reads or 100, belts_read = 0, belts_total = 0 }
 end
 
-function M.count(acc, name)
-  acc.counts[name] = (acc.counts[name] or 0) + 1
+-- A belt was found: true when its contents should still be read (the reads are capped per call).
+function M.take_belt(acc)
+  acc.belts_total = acc.belts_total + 1
+  if acc.belts_read >= acc.max_belt_reads then return false end
+  acc.belts_read = acc.belts_read + 1
+  return true
+end
+
+function M.count(acc, name, n)
+  acc.counts[name] = (acc.counts[name] or 0) + (n or 1)
+end
+
+-- A crowded area: counts came from count_entities_filtered per name and only a limited number of
+-- inserters, belts and fluid boxes are read. totals = {inserters, belts} (all of them in the circle).
+function M.sampled(acc, totals)
+  acc.sampled = true
+  acc.inserters_total = totals.inserters
+  acc.belts_total_counted = totals.belts
 end
 
 -- record: {name, gps, status} (status is the defines.entity_status name)
 function M.add_inserter(acc, record)
+  acc.inserters_read = (acc.inserters_read or 0) + 1
   acc.by_status[record.status] = (acc.by_status[record.status] or 0) + 1
   if STUCK[record.status] then
     acc.stuck_total = acc.stuck_total + 1
@@ -68,12 +87,18 @@ function M.finish(acc)
   for i = #acc.stuck, acc.limit + 1, -1 do acc.stuck[i] = nil end
   local fluids = sorted(acc.fluids, "amount")
   for _, f in ipairs(fluids) do f.amount = math.floor(f.amount * 10 + 0.5) / 10 end
-  return {
+  local result = {
     counts = acc.counts,
     inserters = { by_status = acc.by_status, stuck = acc.stuck, stuck_total = acc.stuck_total },
-    belts = { items = sorted(acc.items, "count", 10) },
+    belts = { items = sorted(acc.items, "count", 10), read = acc.belts_read, total = acc.belts_total },
     fluids = fluids,
   }
+  if acc.sampled then
+    result.sampled = true
+    result.inserters.read, result.inserters.total = acc.inserters_read or 0, acc.inserters_total
+    result.belts.total = acc.belts_total_counted
+  end
+  return result
 end
 
 return M

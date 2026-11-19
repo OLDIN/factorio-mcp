@@ -53,6 +53,36 @@ transport_logic.add_entity_fluids(fl, fluid_entity({ false, { name = "steam", am
 local f = transport_logic.finish(fl).fluids
 assert(f[1].name == "water" and f[1].amount == 4638 and f[2].name == "steam" and f[2].amount == 7, "per-entity shares summed")
 
+-- belt contents are read from at most max_belt_reads belts (each costs several microseconds); the
+-- answer says how many were read of how many
+local cap = transport_logic.new_acc(5, 2)
+local reads = 0
+for _ = 1, 5 do
+  if transport_logic.take_belt(cap) then
+    reads = reads + 1
+    transport_logic.add_belt_items(cap, { { name = "coal", count = 1 } })
+  end
+end
+local capped = transport_logic.finish(cap).belts
+assert(reads == 2 and capped.read == 2 and capped.total == 5 and capped.items[1].count == 2, "a sample of 2 of 5")
+local uncapped = transport_logic.new_acc(5)
+assert(transport_logic.take_belt(uncapped) and transport_logic.finish(uncapped).belts.read == 1, "default cap is generous")
+
+-- a crowded area (sampled): counts come from count_entities_filtered per name, details from a limited
+-- read; the answer says so and how many inserters, belts and fluid boxes were read of how many
+local dense = transport_logic.new_acc(5, 100)
+transport_logic.count(dense, "transport-belt", 3000)
+transport_logic.count(dense, "inserter", 2)
+transport_logic.count(dense, "inserter")
+transport_logic.sampled(dense, { inserters = 300, belts = 3000 })
+for _ = 1, 3 do transport_logic.add_inserter(dense, { name = "inserter", gps = "[gps=1,1,nauvis]", status = "no_power" }) end
+for _ = 1, 4 do transport_logic.take_belt(dense) end
+local dr = transport_logic.finish(dense)
+assert(dr.counts["transport-belt"] == 3000 and dr.counts.inserter == 3, "counts by name, n at a time")
+assert(dr.sampled == true and dr.inserters.read == 3 and dr.inserters.total == 300, "inserters read of total")
+assert(dr.belts.read == 4 and dr.belts.total == 3000, "belts read of the counted total")
+assert(r.sampled == nil and r.inserters.read == nil, "a fully read area says nothing extra")
+
 -- top 10 belt items only
 local many = transport_logic.new_acc(5)
 for i = 1, 12 do transport_logic.add_belt_items(many, { { name = "item-" .. i, count = i } }) end

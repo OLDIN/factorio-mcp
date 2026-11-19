@@ -194,4 +194,56 @@ assert(def_page.summary.issues.no_ammo == 2, "two own dry turrets, the enemy one
 assert(def_page.by_surface.nauvis.problems == 2)
 assert(def_page.problems[1].gps:match("nauvis%]$"))
 
+-- resources: a dense ore field is cut into small areas (no single read of a whole chunk of ore), every
+-- tile counted once, patches as in the synchronous command; resources_overview sums per surface
+local function ore(name, x, y, amount)
+  return { name = name, type = "resource", position = { x = x, y = y }, valid = true, amount = amount,
+    prototype = { mineable_properties = { products = { { type = name == "crude-oil" and "fluid" or "item" } } } } }
+end
+local field = {}
+for x = 0, 63 do for y = 0, 31 do field[#field + 1] = ore("iron-ore", x + 0.5, y + 0.5, 10) end end
+field[#field + 1] = ore("crude-oil", 300.5, 300.5, 50000)
+local reads = {}
+local ore_surface = make_surface(field, { { x = 0, y = 0 }, { x = 9, y = 9 } })
+-- counting a rich block costs time per entity: every count stops just past the split threshold
+local plain_count = ore_surface.count_entities_filtered
+ore_surface.count_entities_filtered = function(filter)
+  assert(filter.limit and filter.limit <= 301, "count without a limit")
+  return math.min(plain_count(filter), filter.limit)
+end
+local plain_find = ore_surface.find_entities_filtered
+ore_surface.find_entities_filtered = function(filter)
+  local found = plain_find(filter)
+  reads[#reads + 1] = #found
+  return found
+end
+local rp = run("resources", { caller = "alice", surface = "nauvis", x = 32, y = 16, radius = 128, limit = 5 }, ore_surface)
+assert(rp.patches_total == 1 and rp.patches[1].name == "iron-ore" and rp.patches[1].tiles == 2048, "every tile once")
+assert(rp.patches[1].amount == 20480 and rp.radius == 128 and rp.center.surface == "nauvis")
+local biggest = 0
+for _, n in ipairs(reads) do if n > biggest then biggest = n end end
+assert(biggest <= 300, "no area read holds more than a few hundred tiles, got " .. biggest)
+local op = run("resources_overview", { caller = "alice" }, make_surface(field, { { x = 0, y = 0 }, { x = 9, y = 9 } }))
+assert(op.summary.resources == 2 and op.total == 2)
+assert(op.resources[1].name == "iron-ore" and op.resources[1].tiles == 2048 and op.resources[1].amount == 20480)
+assert(op.resources[2].name == "crude-oil" and op.resources[2].wells == 1 and op.resources[2].fluid == true)
+for _, bad in ipairs({
+  { "resources", { caller = "alice", surface = "nauvis", x = 0, y = 0, radius = 500 } },
+  { "resources", { caller = "nobody", surface = "nauvis", x = 0, y = 0, radius = 50 } },
+  { "resources_overview", { caller = "nobody" } },
+}) do
+  local ok, err = pcall(kinds.plan, bad[1], bad[2])
+  assert(not ok and type(err) == "table" and err.code, "expected a coded error for " .. bad[1])
+end
+
+-- planning takes the chunk bounds from storage when they are known: no walk over every chunk
+local walked = false
+local known = make_surface(entities, { { x = 0, y = 0 } })
+known.index = 1
+known.get_chunks = function() walked = true; return function() return nil end end
+_G.storage = { mcp_bounds = { [1] = { minx = 0, miny = 0, maxx = 1, maxy = 1 } } }
+local _, kplan = run("machines_overview", {}, known)
+assert(not walked and kplan.initial_items == 1, "bounds from storage, one block")
+_G.storage = {}
+
 print("job_kinds_test ok")

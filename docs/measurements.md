@@ -171,3 +171,52 @@ Measurements on the real save (nauvis, 26,099 chunks, 3,015 machines/drills):
   it if `on_load` brought the tick handler back).
 - The `get_chunks` pass (23 ms for this surface) is a single-tick cost at `job_start`; it scales with
   the number of generated chunks of the requested surfaces.
+
+
+## Local details and per-tick cost (Task 15, 0.4.0)
+
+Copy of the real save (nauvis: 29,535 chunks, 185,044 resource tiles; Factorio 2.1.24, server under
+`nice 10` on the owner's Mac). Method: the game's profiler around the mod's real handler
+(`/sc __factorio-mcp__` + `package.loaded['__factorio-mcp__/scripts/dispatcher.lua'].execute`, so the
+number includes grouping and JSON), average of 5 after a warm-up. Worst cases were built on the copy:
+a solid 256x256 iron-ore field and a 64x64 block of loaded belts, inside the map's chunk bounds.
+Goal (owner): the game must not stutter, so a synchronous answer stays around 2 ms and heavy work
+runs as a job whose single tick stays around 2 ms.
+
+- **Found first, before any change.** `resources` took 29-33 ms on the real save and 147 ms on the
+  solid field at r=128: `get_resource_counts()` of the whole surface alone is 24-30 ms and cannot be
+  split, and reading ore costs ~2.2 us per tile (find+read ~1 us, per-tile records ~1.2 us).
+  `transport` on packed belts took 9.5 ms (r=16) and 14.5 ms (r=32). Every whole-map `job_start`
+  took 32 ms in one tick, 24.6 ms of it the `get_chunks` walk for the map bounds. Counting is not
+  free either: its cost grows with the area even where empty (+-1024 tiles 8.6 ms, +-16384 69 ms)
+  and with the entities in it (a block of 65k ore tiles ~2.4 ms).
+- **Changes.** `resources` counts the circle first, stopping at 1,001 (`count` with `limit`); above
+  1,000 tiles it answers `job_needed` and the service runs job kind `resources`; ore is summed per
+  chunk while reading (numeric keys, no per-tile records); the surface totals moved to job kind
+  `resources_overview` (tool `base_resources_overview`). Job areas count with `limit = split + 1`;
+  resource areas split at 300 tiles down to 16-tile squares. `transport` reads everything up to 600
+  entities; above that, counts per name come from `count_entities_filtered` and only 300 inserters,
+  100 belts and 300 fluid boxes are read (`sampled: true`). Map bounds live in `storage`, widened by
+  `on_chunk_generated`, so `job_start` walks nothing.
+- **Synchronous answers now** (ms in game, bytes): inventory 0.01-0.03 (60 B offline), alerts
+  0.15-0.31 (1 KB), resources `job_needed` 0.06-0.10 at any radius on the solid field (the full
+  count at r=128 was 2.36), transport real spots at r=32 1.0-1.6 (3.2-3.4 KB), packed belts r=8 0.4-0.5,
+  r=16 0.5, r=32 1.2 (was 14.5). Largest answer 5.8 KB (`hello`).
+- **Jobs now**, driven one tick budget (50 units) at a time, per-tick time:
+
+  | Job | Ticks | Median | p99 | Max (before -> after `count` limit) |
+  |---|---|---|---|---|
+  | `resources` solid field r=128 (51,468 tiles) | 258 | 0.37 ms | 1.55 ms | 10.4 -> 2.0 ms |
+  | `resources` real save r=128 (3,782 tiles) | 31 | 0.67 ms | 1.37 ms | 1.4 ms |
+  | `resources_overview` nauvis (250k tiles) | 1,441 | 0.25 ms | 0.98 ms | 16.2 -> 1.7 ms |
+  | `machines_overview` (existing kind) | 470 | 0.05 ms | 1.34 ms | 8.7 -> 2.4 ms |
+
+  `job_start` 0.13-1.7 ms (was 32 ms). At 60 UPS the overview takes ~24 s in `ticks` mode. What is
+  left in the worst tick is two 512-tile counts of busy ground (~1.2 ms each).
+- **Accuracy.** `resources_overview` equals `get_resource_counts()` for every resource on nauvis
+  (within 0.1%, drills may mine meanwhile; live test). Fluids: `get_fluid(i)` is each entity's own
+  share of its segment (pipe 18/100, tank 4,620/25,000), and a tank filled with 1,000 water plus a pipe
+  report 1,000. Pollution `per_minute`: 40 stone furnaces x 2/min read 80.00 in the 5 s and 1 min
+  windows.
+- **Factorio 2.1 API.** `LuaEntity.fluidbox` does not exist (use `fluids_count`, `get_fluid(i)`);
+  an offline player has no character and `get_main_inventory()` returns an empty stand-in.
