@@ -29,7 +29,21 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         result.setdefault("next", None)
         return result
 
+    async def list_platforms(name: str | None = None, limit: int = 10) -> dict[str, Any]:
+        args: dict[str, Any] = {**caller_args(), "limit": limit}
+        if name is not None:
+            args["name"] = name
+        result = await call_mod(bridge, "platforms", args)
+        return normalize_lists(result, ["platforms", "platforms.*.hub_contents"])
+
     return [
+        ToolSpec(
+            "list_platforms",
+            "platforms",
+            "Your force's space platforms: state, where each is or last was, speed, damaged tiles and the hub's "
+            "biggest stocks. Give name= for one platform. Empty without Space Age.",
+            list_platforms,
+        ),
         ToolSpec(
             "list_trains",
             "trains",

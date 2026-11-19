@@ -28,6 +28,7 @@ ALLOWED_SUBS: frozenset[str] = frozenset(
         "pollution",
         "logistics",
         "trains",
+        "platforms",
         "job_start",
         "job_result",
         "job_cancel",

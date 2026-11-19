@@ -85,3 +85,42 @@ rcon.print(helpers.table_to_json({{state = t.state, surface = t.front_stock.surf
     )
     got = json.loads(reply)
     assert got["surface"] == "nauvis" and isinstance(got["state"], int) and got["ticks"] >= 0
+
+
+async def _platform(armed) -> str:
+    has = (await sc(armed, "rcon.print(game.planets.nauvis and prototypes.item['space-platform-starter-pack'] and 'yes' or 'no')")).strip()
+    if has != "yes":
+        pytest.skip("Space Age is not enabled (run with SPACE_AGE=true)")
+    return (
+        await sc(
+            armed,
+            """
+local name = 'test-' .. game.tick
+local p = game.forces.player.create_space_platform{name = name, planet = 'nauvis', starter_pack = 'space-platform-starter-pack'}
+rcon.print(p and p.name or '')
+""",
+        )
+    ).strip()
+
+
+async def test_platform_api_fields_the_mod_reads(armed):
+    """The fields platforms_logic reads exist on a real platform (checked without a caller)."""
+    name = await _platform(armed)
+    assert name
+    reply = await sc(
+        armed,
+        f"""
+local p
+for _, x in pairs(game.forces.player.platforms) do if x.name == '{name}' then p = x end end
+rcon.print(helpers.table_to_json({{state = p.state, speed = p.speed, distance = p.distance,
+  damaged = #p.damaged_tiles, has_loc = p.space_location ~= nil, hub = p.hub ~= nil}}))
+""",
+    )
+    got = json.loads(reply)
+    assert isinstance(got["state"], int) and got["damaged"] >= 0
+
+
+async def test_platforms_lists_a_new_platform(armed, caller_nick):
+    name = await _platform(armed)
+    result = await ModBridge(armed).call("platforms", {"caller": caller_nick, "name": name})
+    assert result["platforms"][0]["name"] == name

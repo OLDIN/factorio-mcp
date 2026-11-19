@@ -95,3 +95,29 @@ async def test_trains_none(stack):
     stack.fake.responses[cmd] = _env({"by_state": [], "total": 0, "problems_total": 0, "trains": {}})
     data = _data(await _tool(stack, "list_trains", {}))
     assert data["trains"] == [] and data["by_state"] == {}
+
+
+async def test_platforms_none(stack):
+    await _setup(stack)
+    cmd = build_command("platforms", {"caller": "aliceNick", "limit": 10})
+    stack.fake.responses[cmd] = _env({"platforms": {}, "total": 0})
+    data = _data(await _tool(stack, "list_platforms", {}))
+    assert data["platforms"] == [] and data["total"] == 0
+
+
+async def test_platforms_by_name(stack):
+    await _setup(stack)
+    cmd = build_command("platforms", {"caller": "aliceNick", "limit": 10, "name": "Alpha"})
+    stack.fake.responses[cmd] = _env({"total": 1, "platforms": [{
+        "name": "Alpha", "state": "on_the_path", "last_location": "nauvis", "speed": 0.5, "distance": 0.25,
+        "damaged_tiles": 0, "hub_contents": {}}]})
+    data = _data(await _tool(stack, "list_platforms", {"name": "Alpha"}))
+    assert data["platforms"][0]["hub_contents"] == []
+
+
+async def test_platforms_unknown_name(stack):
+    await _setup(stack)
+    cmd = build_command("platforms", {"caller": "aliceNick", "limit": 10, "name": "Nope"})
+    stack.fake.responses[cmd] = json.dumps({"v": 1, "ok": False, "error": {"code": "not_found", "message": "no such platform"}})
+    res = await _tool(stack, "list_platforms", {"name": "Nope"})
+    assert res["isError"] is True and res["content"][0]["text"].endswith("no such platform")
