@@ -24,9 +24,8 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         ToolSpec(
             "research_status",
             "research",
-            "Your force's research: what is being researched now and how far, the queue, how many technologies "
-            "are done, and which can be researched right now (paged with offset/limit). Give name= for one "
-            "technology: level, cost, progress and which prerequisites are still missing.",
+            "Your force's research: current research and progress, the queue, how many are done, what can be "
+            "researched now. name= gives one technology: level, cost, progress, missing prerequisites.",
             research_status,
         )
     ]

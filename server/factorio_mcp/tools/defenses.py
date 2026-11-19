@@ -55,21 +55,16 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         ToolSpec(
             "inspect_defenses",
             "defenses",
-            "Inspect military defenses, turrets, and walls around a point: returns counts of gun, laser, "
-            "flamethrower, rocket and tesla turrets, ammo and fuel/fluid readiness, power state, wall health, "
-            "and a prioritized list of compromised or unsupplied defense structures (no ammo, no power, "
-            "no fluid, or damaged). Enemy worms and neutral entities are not counted. Radius up to 64 tiles "
-            "(default 32), max_listed up to 50. Give a [gps=x,y,surface] tag, or a player's name, or nothing "
-            "to use your own position.",
+            "Turrets, walls, gates, mines and radars around a point (radius up to 64): counts, ammo, fluid "
+            "and power readiness, wall health, and the worst problems first (no ammo, power or fluid, then "
+            "damaged). Enemy worms are not counted.",
             inspect_defenses,
         ),
         ToolSpec(
             "base_defenses_overview",
             "threats",  # the defenses_overview job kind ships with mod 0.4.0, as does `threats`
-            "Defenses of your force on the whole base: turrets, walls, mines and radars per surface, issue counts, "
-            "and the worst problems first with [gps] (turrets without ammo, power or fluid, then damaged ones). "
-            "Scans in small steps over game ticks; if the answer is status \"running\", call again with the "
-            "returned job_id. Pages with offset/limit.",
+            "Defenses of your force on the whole base: turrets, walls, mines and radars per surface, issue "
+            "counts, and the worst problems first with [gps].",
             base_defenses_overview,
         ),
     ]

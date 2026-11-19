@@ -50,17 +50,17 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         ToolSpec(
             "inspect_threats",
             "threats",
-            "Enemy nests, worms and demolishers around a point (radius default 128; above 256 up to 1000 runs "
-            "over several ticks, call again with job_id if status is \"running\"): counts by name and the "
-            "nearest ones with distance, direction, [gps] and the pollution reaching each nest.",
+            "Enemy nests, worms and demolishers around a point (radius up to 1000; above 256 it runs as a "
+            "job): counts by name and the nearest ones with distance, direction, [gps] and the pollution "
+            "reaching each nest.",
             inspect_threats,
         ),
         ToolSpec(
             "inspect_pollution",
             "pollution",
-            "Pollution around a point: the surface's pollutant (smoke on most planets, spores on Gleba) and total, "
-            "the most polluted chunks of a grid (grid odd, default 9 chunks), the biggest polluters on the "
-            "surface per minute, and enemy nests the pollution reaches (they attack when fed).",
+            "Pollution around a point: the surface's pollutant (spores on Gleba) and total, the most polluted "
+            "chunks of a grid (odd, default 9 chunks), the biggest polluters per minute, and the nests the "
+            "pollution reaches (fed nests attack).",
             inspect_pollution,
         ),
     ]

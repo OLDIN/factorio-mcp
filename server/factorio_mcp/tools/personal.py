@@ -23,15 +23,15 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         ToolSpec(
             "my_inventory",
             "inventory",
-            "Your own inventory only (never another player's): main inventory by stack size, armor and its "
-            "equipment, guns and ammo, crafting queue size. Not readable while you are offline.",
+            "Your own inventory only, never another player's: main inventory, armor and its equipment, guns, "
+            "ammo, crafting queue. Not readable while you are offline.",
             my_inventory,
         ),
         ToolSpec(
             "my_alerts",
             "alerts",
-            "Your own alerts only: grouped by type (entity destroyed, turret out of ammo, no material for "
-            "construction, train without path, ...) with counts and up to `limit` examples per type with [gps].",
+            "Your own alerts only, by type (entity destroyed, turret out of ammo, no material for "
+            "construction, ...) with counts and examples with [gps].",
             my_alerts,
         ),
     ]

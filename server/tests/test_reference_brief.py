@@ -57,7 +57,7 @@ async def _setup(stack):
 
 
 async def _call(stack, arguments):
-    r = await stack.rpc("tools/call", {"name": "reference_recipes", "arguments": arguments})
+    r = await stack.rpc("tools/call", {"name": "game_reference", "arguments": {"kind": "recipes", **arguments}})
     return json.loads(r.json()["result"]["content"][0]["text"])
 
 

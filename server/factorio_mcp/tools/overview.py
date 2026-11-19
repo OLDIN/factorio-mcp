@@ -81,12 +81,9 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         ToolSpec(
             "base_machines_overview",
             "job_start",
-            "Overview of every production machine, lab and drill on the whole base: totals, machines by "
-            "status and by surface, and groups per surface and recipe with how many work, why the rest stand "
-            "and up to 3 example positions. The answer is compact: the most stuck groups first (25 by default; "
-            "use offset/limit for more, only_stopped=false to include fully working groups). Scans the whole map in small steps spread over game ticks, so players do not "
-            "notice it, but a big base can take a minute or two. If the answer is status \"running\", call "
-            "the tool again with the returned job_id to get the result. Optionally limit it to some surfaces.",
+            "Every production machine, lab and drill on the whole base: totals by status and surface, then "
+            "groups per surface and recipe, the most stuck first, with why they stand and up to 3 positions. "
+            "only_stopped=false also lists fully working groups; surfaces= limits the scan.",
             base_machines_overview,
         )
     ]

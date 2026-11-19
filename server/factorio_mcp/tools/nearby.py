@@ -75,28 +75,24 @@ def specs(bridge: ModBridge) -> list[ToolSpec]:
         ToolSpec(
             "inspect_resources",
             "resources",
-            "Resource patches around a [gps] point, a player, or yourself (radius up to 128 tiles, default 64): "
-            "each patch with its resource, amount, tiles (or wells for crude oil, raw amount), centre [gps], "
-            'most tiles first. A rich area is read over several ticks: if the answer is status "running", '
-            "call again with the returned job_id. For what is left on whole surfaces use base_resources_overview.",
+            "Resource patches around a point (radius up to 128): resource, amount, tiles (wells and raw "
+            "amount for crude oil), centre [gps], most tiles first. For whole surfaces use "
+            "base_resources_overview.",
             inspect_resources,
         ),
         ToolSpec(
             "base_resources_overview",
             "resources",  # the resources_overview job kind ships with the resources command (mod 0.4.0+)
-            "Resources left on every surface (or the listed ones): per surface and resource the amount and "
-            "tiles (wells and raw amount for fluids like crude oil), ores first, most first. Scans the whole map "
-            'in small steps over game ticks, so players do not notice it; if the answer is status "running", '
-            "call again with the returned job_id. Pages with offset/limit.",
+            "Resources left on every surface, or the listed ones: amount and tiles per resource (wells and "
+            "raw amount for fluids such as crude oil), ores first, most first.",
             base_resources_overview,
         ),
         ToolSpec(
             "inspect_transport",
             "transport",
-            "Belts, inserters and pipes of your force around a [gps] point, a player, or yourself (radius up to "
-            "32 tiles, default 16): counts, inserters by status with the stuck ones first (no power, output "
-            "blocked, waiting for items) with [gps], the items on the belts (read from at most 100 belts: "
-            "belts.read of belts.total), and the fluids in pipes and tanks.",
+            "Belts, inserters and pipes of your force around a point (radius up to 32): counts, stuck "
+            "inserters first (no power, output blocked, waiting for items) with [gps], the items on belts (a "
+            "sample of 100 belts on a packed bus), fluids in pipes and tanks.",
             inspect_transport,
         ),
     ]
